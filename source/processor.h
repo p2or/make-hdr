@@ -111,7 +111,7 @@ public:
 
                     for (int c = 0; c < CMP_MAX; ++c)
                     {
-                        const float hdr = std::exp(result[c] * weight_sum) / _sources.size();
+                        const float hdr = std::exp(result[c] * weight_sum);
                         dst[c] = (ptype)pow(hdr * (float)std::pow(2, _exposure), 1.f / _gamma);
                     }
 
