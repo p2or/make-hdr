@@ -255,23 +255,29 @@ public:
                 _effect.response(_input_depth, c)[m] = avg;
         }
 
+        // 3 passes of box-filter smoothing approximates a Gaussian kernel,
+        // handling broader plateau-type banding from sparsely-sampled highlight bins.
         const int radius = 4;
+        const int passes = 3;
         std::vector<double> smoothed(_input_depth);
-        double* curve = _effect.response(_input_depth, 0);
-        for (int m = 0; m < _input_depth; ++m)
+        for (int pass = 0; pass < passes; ++pass)
         {
-            double sum = 0.0;
-            int count = 0;
-            for (int k = std::max(0, m - radius); k <= std::min(_input_depth - 1, m + radius); ++k)
+            double* curve = _effect.response(_input_depth, 0);
+            for (int m = 0; m < _input_depth; ++m)
             {
-                sum += curve[k];
-                ++count;
+                double sum = 0.0;
+                int count = 0;
+                for (int k = std::max(0, m - radius); k <= std::min(_input_depth - 1, m + radius); ++k)
+                {
+                    sum += curve[k];
+                    ++count;
+                }
+                smoothed[m] = sum / count;
             }
-            smoothed[m] = sum / count;
+            for (int m = 0; m < _input_depth; ++m)
+                for (int c = 0; c < CMP_MAX; ++c)
+                    _effect.response(_input_depth, c)[m] = smoothed[m];
         }
-        for (int m = 0; m < _input_depth; ++m)
-            for (int c = 0; c < CMP_MAX; ++c)
-                _effect.response(_input_depth, c)[m] = smoothed[m];
     }
 
     inline float lookup_response(int bin, int channel) const
