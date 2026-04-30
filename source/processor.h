@@ -69,7 +69,7 @@ public:
                     float weight_sum = 0.f;
                     float response_log[3] = { 0.f, 0.f, 0.f };
                     float result[3] = { 0.f, 0.f, 0.f };
-                    float fallback_raw[3] = { 0.f, 0.f, 0.f };
+                    float fallback_log[3] = { 0.f, 0.f, 0.f };
                     float min_exp_log = FLT_MAX;
 
                     ptype* dst = (ptype*)_dstImg->getPixelAddress(x, y);
@@ -104,12 +104,18 @@ public:
                         weight_src /= CMP_MAX;
 
                         // Track the darkest source as fallback for fully-clipped pixels.
-                        // Use raw (unclamped) values so color ratios are preserved above 1.0.
+                        // Use raw unclamped value when > 1.0 (genuine HDR in linear float),
+                        // otherwise use the response curve at bin 255 (clipped at camera max).
                         if (_exp_times_log[i] < min_exp_log)
                         {
                             min_exp_log = _exp_times_log[i];
                             for (int c = 0; c < CMP_MAX; ++c)
-                                fallback_raw[c] = std::max((float)src[c], 1e-6f);
+                            {
+                                const float raw = (float)src[c];
+                                fallback_log[c] = raw > 1.0f
+                                    ? std::log(raw) - _exp_times_log[i]
+                                    : response_log[c] - _exp_times_log[i];
+                            }
                         }
 
                         for (int c = 0; c < CMP_MAX; ++c)
@@ -122,7 +128,7 @@ public:
                     {
                         const float log_hdr = weight_sum > 0.f
                             ? result[c] / weight_sum
-                            : std::log(fallback_raw[c]) - min_exp_log;
+                            : fallback_log[c];
                         const float hdr = std::exp(log_hdr);
                         dst[c] = (ptype)pow(hdr * (float)std::pow(2, _exposure), 1.f / _gamma);
                     }
