@@ -174,11 +174,12 @@ public:
     {   
         const float aspect = (float)_width / (float)_height;
         
-        const int x_points = (int)(sqrt(aspect * _samples));
-        const int y_points = _samples / x_points;
+        const int actual_samples = (_solver_type == 0) ? _samples : std::max(_samples * 100, 10000);
+        const int x_points = std::max(1, (int)(sqrt(aspect * actual_samples)));
+        const int y_points = std::max(1, actual_samples / x_points);
 
-        const int step_x = _width / x_points;
-        const int step_y = _height / y_points;
+        const int step_x = std::max(1, _width / x_points);
+        const int step_y = std::max(1, _height / y_points);
 
         for (int i = 0, x = step_x / 2; i < x_points; i++, x += step_x)
         {
