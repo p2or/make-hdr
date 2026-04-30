@@ -169,11 +169,10 @@ void robertson_solver(const int channel,
             for (int j = 0; j < sources_size; ++j)
             {
                 const int s_int = sample_ints[i][j];
-                const double w = input_weights[s_int];
                 const double t = exp_times[j];
 
-                sum_I_num[s_int] += w * t * E[i];
-                sum_I_den[s_int] += w; 
+                sum_I_num[s_int] += t * E[i];
+                sum_I_den[s_int] += 1.0; 
             }
         }
 
@@ -207,15 +206,6 @@ void robertson_solver(const int channel,
                 I[k] = I[last_valid] * 1.001; // Slight extrapolation
             }
         }
-
-        // Gentle Smoothing pass to remove micro-noise spikes before enforcing monotonicity
-        std::vector<double> smoothed_I(input_depth);
-        smoothed_I[0] = I[0];
-        smoothed_I[input_depth - 1] = I[input_depth - 1];
-        for (int m = 1; m < input_depth - 1; ++m) {
-            smoothed_I[m] = (I[m - 1] + I[m] + I[m + 1]) / 3.0;
-        }
-        I = smoothed_I;
 
         // Enforce strict monotonicity (crucial to prevent color channel inversions)
         for (int m = 1; m < input_depth; ++m) {
