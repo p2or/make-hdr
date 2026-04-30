@@ -195,6 +195,7 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     OFX::DoubleParamDescriptor* highlights_param = desc.defineDoubleParam("highlights");
     OFX::BooleanParamDescriptor* show_samples_param = desc.defineBooleanParam("show_samples");
     OFX::IntParamDescriptor* samples_param = desc.defineIntParam("samples");
+    OFX::ChoiceParamDescriptor* solver_param = desc.defineChoiceParam("solver");
     OFX::DoubleParamDescriptor* smoothness_param = desc.defineDoubleParam("smoothness");
     OFX::ChoiceParamDescriptor* input_depth_param = desc.defineChoiceParam("input_depth");
     OFX::ChoiceParamDescriptor* log_level_param = desc.defineChoiceParam("log_level");
@@ -231,7 +232,11 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     samples_param->setDefault(100);
     samples_param->setDisplayRange(1, 100);
     samples_param->setParent(*advanced_group);
-
+    solver_param->appendOption("Debevec");
+    solver_param->appendOption("Robertson");
+    solver_param->setDefault(0);
+    solver_param->setParent(*advanced_group);
+    solver_param->setLabel("solver math");
     smoothness_param->setDefault(50);
     smoothness_param->setDisplayRange(1, 100);
     smoothness_param->setParent(*advanced_group);

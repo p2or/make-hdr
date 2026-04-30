@@ -165,6 +165,7 @@ public:
         _calibrate = _effect.calibrate(time);
         _show_samples = _effect.show_samples(time);
         _samples = _effect.samples(time);
+        _solver_type = _effect.solver_type(time);
         _smoothness = _effect.smoothness(time);
         _input_depth = _effect.input_depth(time);
     }
@@ -195,14 +196,28 @@ public:
 
         for (int c = 0; c < CMP_MAX; ++c)
         {
-            threads[c] = std::thread(solver<ptype>, c,
-                                                    _input_depth,
-                                                    _smoothness,
-                                                    _sources,
-                                                    _sample_points,
-                                                    _exp_times_log,
-                                                    _effect.input_weights(),
-                                                    _effect.response(_input_depth, c));                                               
+            if (_solver_type == 0) // Debevec
+            {
+                threads[c] = std::thread(debevec_solver<ptype, OFX::Image>, c,
+                                                        _input_depth,
+                                                        _smoothness,
+                                                        _sources,
+                                                        _sample_points,
+                                                        _exp_times_log,
+                                                        _effect.input_weights(),
+                                                        _effect.response(_input_depth, c));                                               
+            }
+            else // Robertson
+            {
+                threads[c] = std::thread(robertson_solver<ptype, OFX::Image>, c,
+                                                        _input_depth,
+                                                        (int)_smoothness,
+                                                        _sources,
+                                                        _sample_points,
+                                                        _exp_times,
+                                                        _effect.input_weights(),
+                                                        _effect.response(_input_depth, c)); 
+            }
         }
 
         for (int c = 0; c < CMP_MAX; ++c)
@@ -249,6 +264,7 @@ private:
     bool _calibrate = false;
     bool _show_samples = false;
     int _samples = 0;
+    int _solver_type = 0;
     float _smoothness = 0;
     int _input_depth = 0;
 

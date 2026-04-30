@@ -79,6 +79,19 @@ if (NUKE_FOUND)
 		XCODE_SCHEME_ARGUMENTS ${CMAKE_SOURCE_DIR}/test/room.nk)
 endif()
 
+# -- Tests --
+enable_testing()
+add_executable(make_hdr_tests test/test_solvers.cpp)
+target_include_directories(make_hdr_tests PRIVATE ${ARMA_INCLUDE_DIRS} ${SPDLOG_INCLUDE_DIR})
+
+if(USE_ACCELERATE)
+	target_link_libraries(make_hdr_tests PRIVATE ${MATH_LIBRARIES})
+else()
+	target_link_libraries(make_hdr_tests PRIVATE lapack blas f2c)
+endif()
+
+add_test(NAME SolverKernelsTest COMMAND make_hdr_tests)
+
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT make_hdr)
 
 # Install the plugin binary and resource files.

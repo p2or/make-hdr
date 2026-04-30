@@ -58,6 +58,7 @@ public:
     bool calibrate(const double& time) { bool val; _calibrate->getValueAtTime(time, val); return val; }
     bool show_samples(const double& time) { bool val; _show_samples->getValueAtTime(time, val); return val; }
     int samples(const double& time) { return _samples->getValueAtTime(time); }
+    int solver_type(const double& time) { int type; _solver->getValueAtTime(time, type); return type; }
     float smoothness(const double& time) { return (float)_smoothness->getValueAtTime(time); }
     int input_depth(const double& time) { int depth; _input_depth->getValueAtTime(time, depth); return _input_depths[depth]; }
     int log_level(const double& time) { int level; _log_level->getValueAtTime(time, level); return level; }
@@ -83,6 +84,7 @@ protected:
     OFX::BooleanParam* _show_samples = fetchBooleanParam("show_samples");
     OFX::IntParam* _samples = fetchIntParam("samples");
     OFX::DoubleParam* _smoothness = fetchDoubleParam("smoothness");
+    OFX::ChoiceParam* _solver = fetchChoiceParam("solver");
     OFX::ChoiceParam* _input_depth = fetchChoiceParam("input_depth");
     OFX::ChoiceParam* _log_level = fetchChoiceParam("log_level");   
 };
