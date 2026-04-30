@@ -54,87 +54,84 @@ public:
 
     virtual void multiThreadProcessImages(OfxRectI proc_window)
     {
-        if (!_sources.empty())
+        if (_sources.empty()) return;
+
+
+        for (int y = proc_window.y1; y < proc_window.y2; ++y)
         {
-            for (int y = proc_window.y1; y < proc_window.y2; ++y)
+            if (_effect.abort()) return;
+
+            for (int x = proc_window.x1; x < proc_window.x2; ++x)
             {
-                if (_effect.abort())
-                    return;
+                float weight_sum = 0.f;
+                float response_log[3] = { 0.f, 0.f, 0.f };
+                float result[3] = { 0.f, 0.f, 0.f };
+                float fallback_log[3] = { 0.f, 0.f, 0.f };
+                float min_exp_log = FLT_MAX;
 
-                for (int x = proc_window.x1; x < proc_window.x2; ++x)
+                ptype* dst = (ptype*)_dstImg->getPixelAddress(x, y);
+
+                for (int i = 0; i < _sources.size(); ++i)
                 {
-                    float weight_sum = 0.f;
-                    float response_log[3] = { 0.f, 0.f, 0.f };
-                    float result[3] = { 0.f, 0.f, 0.f };
-                    float fallback_log[3] = { 0.f, 0.f, 0.f };
-                    float min_exp_log = FLT_MAX;
+                    const ptype* src = (ptype*)_sources[i]->getPixelAddress(x, y);
 
-                    ptype* dst = (ptype*)_dstImg->getPixelAddress(x, y);
+                    if (src == nullptr) return;
 
-                    for (int i = 0; i < _sources.size(); ++i)
-                    {
-                        const ptype* src = (ptype*)_sources[i]->getPixelAddress(x, y);
-
-                        if (src == nullptr)
-                            return;
-
-                        float weight_src = 0.f;
-
-                        for (int c = 0; c < CMP_MAX; ++c)
-                        {
-                            const ptype sample = std::min<ptype>(std::max<ptype>(src[c], 0.f), 1.f);
-                            const int bin = (int)(sample * (_input_depth - 1));
-                            weight_src += _effect.input_weights()[bin];
-                            response_log[c] = lookup_response(bin, c);
-                        }
-
-                        weight_src /= CMP_MAX;
-
-                        // Track the darkest source as fallback for fully-clipped pixels.
-                        // Use raw unclamped value when > 1.0 (genuine HDR in linear float),
-                        // otherwise use the response curve at bin 255 (clipped at camera max).
-                        if (_exp_times_log[i] < min_exp_log)
-                        {
-                            min_exp_log = _exp_times_log[i];
-                            for (int c = 0; c < CMP_MAX; ++c)
-                            {
-                                const float raw = (float)src[c];
-                                fallback_log[c] = raw > 1.0f
-                                    ? std::log(raw) - _exp_times_log[i]
-                                    : response_log[c] - _exp_times_log[i];
-                            }
-                        }
-
-                        for (int c = 0; c < CMP_MAX; ++c)
-                            result[c] += weight_src * (response_log[c] - _exp_times_log[i]);
-
-                        weight_sum += weight_src;
-                    }
+                    float weight_src = 0.f;
 
                     for (int c = 0; c < CMP_MAX; ++c)
                     {
-                        const float log_hdr = weight_sum > 0.f
-                            ? result[c] / weight_sum
-                            : fallback_log[c];
-                        const float hdr = std::exp(log_hdr);
-                        dst[c] = (ptype)pow(hdr * (float)std::pow(2, _exposure), 1.f / _gamma);
+                        const ptype sample = std::min<ptype>(std::max<ptype>(src[c], 0.f), 1.f);
+                        const int bin = (int)(sample * (_input_depth - 1));
+                        weight_src += _effect.input_weights()[bin];
+                        response_log[c] = lookup_response(bin, c);
                     }
 
-                    if(_show_samples)
-                        for (auto point : _sample_points)
-                            if (x == point.x && y == point.y)
-                                dst[fx::ch::g] = FLT_MAX;
+                    weight_src /= CMP_MAX;
 
-                    dst[fx::ch::a] = 1.0f;
+                    // Track the darkest source as fallback for fully-clipped pixels.
+                    // Use raw unclamped value when > 1.0 (genuine HDR in linear float),
+                    // otherwise use the response curve at bin 255 (clipped at camera max).
+                    if (_exp_times_log[i] < min_exp_log)
+                    {
+                        min_exp_log = _exp_times_log[i];
+                        for (int c = 0; c < CMP_MAX; ++c)
+                        {
+                            const float raw = (float)src[c];
+                            fallback_log[c] = raw > 1.0f
+                                ? std::log(raw) - _exp_times_log[i]
+                                : response_log[c] - _exp_times_log[i];
+                        }
+                    }
+
+                    for (int c = 0; c < CMP_MAX; ++c)
+                        result[c] += weight_src * (response_log[c] - _exp_times_log[i]);
+
+                    weight_sum += weight_src;
                 }
+
+                for (int c = 0; c < CMP_MAX; ++c)
+                {
+                    const float log_hdr = weight_sum > 0.f
+                        ? result[c] / weight_sum
+                        : fallback_log[c];
+                    const float hdr = std::exp(log_hdr);
+                    dst[c] = (ptype)pow(hdr * (float)std::pow(2, _exposure), 1.f / _gamma);
+                }
+
+                if(_show_samples)
+                    for (auto point : _sample_points)
+                        if (x == point.x && y == point.y)
+                            dst[fx::ch::g] = FLT_MAX;
+
+                dst[fx::ch::a] = 1.0f;
             }
         }
     }
 
     virtual void postProcess() 
     {
-        if (_sources.empty())
-            return;
+        if (_sources.empty()) return;
 
         ptype* dst = (ptype*)_dstImg->getPixelData();
 
