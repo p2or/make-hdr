@@ -225,7 +225,9 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     input_depth_param->setLabel("input depth");
 
     samples_param->setDefault(100);
+    samples_param->setRange(1, 100);
     samples_param->setDisplayRange(1, 100);
+    samples_param->setHint("Debevec: number of sample points. Robertson: multiplied by 100 to compensate for sparse bin coverage (e.g. 100 = 10000 samples).");
     samples_param->setParent(*advanced_group);
     solver_param->appendOption("debevec");
     solver_param->appendOption("robertson");
@@ -233,7 +235,10 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     solver_param->setParent(*advanced_group);
     solver_param->setLabel("solver");
     smoothness_param->setDefault(50);
+    smoothness_param->setRange(1, 100);
     smoothness_param->setDisplayRange(1, 100);
+    smoothness_param->setHint("Debevec: regularization strength. Robertson: number of iterations.");
+    smoothness_param->setLabel("smoothness / iterations");
     smoothness_param->setParent(*advanced_group);
 
     log_level_param->appendOption("off");

@@ -174,7 +174,7 @@ public:
 
         const float aspect = (float)_width / (float)_height;
         
-        const int actual_samples = (_solver_type == 0) ? _samples : std::max(_samples * 100, 10000);
+        const int actual_samples = (_solver_type == 0) ? _samples : _samples * 100;
         const int x_points = std::max(1, (int)(sqrt(aspect * actual_samples)));
         const int y_points = std::max(1, actual_samples / x_points);
 
