@@ -56,42 +56,41 @@ void Effect<ptype>::process(Processor<ptype>& processor, const OFX::RenderArgume
         {
             OFX::Clip* src_clip = _src_clips[i];
 
-            if (src_clip != nullptr)
+            if (src_clip != nullptr && src_clip->isConnected())
             {
-                std::shared_ptr<OFX::Image> src_image(src_clip->fetchImage(args.time));
                 const float exp_time = (float)_exp_times[i]->getValueAtTime(args.time);
 
-                if (src_image.get() != nullptr)
+                if (exp_time > 0)
                 {
-                    OFX::BitDepthEnum src_bit_depth = src_image->getPixelDepth();
-                    OFX::PixelComponentEnum src_components = src_image->getPixelComponents();
+                    std::shared_ptr<OFX::Image> src_image(src_clip->fetchImage(args.time));
 
-                    if (src_bit_depth == dst_bit_depth && src_components == dst_components)
+                    if (src_image.get() != nullptr)
                     {
-                        if (exp_time > 0)
+                        OFX::BitDepthEnum src_bit_depth = src_image->getPixelDepth();
+                        OFX::PixelComponentEnum src_components = src_image->getPixelComponents();
+
+                        if (src_bit_depth == dst_bit_depth && src_components == dst_components)
                         {
                             if (dst_image->getBounds().x1 == src_image->getBounds().x1 &&
                                 dst_image->getBounds().x2 == src_image->getBounds().x2 &&
                                 dst_image->getBounds().y1 == src_image->getBounds().y1 &&
-                                dst_image->getBounds().x2 == src_image->getBounds().x2)
+                                dst_image->getBounds().y2 == src_image->getBounds().y2)
                             {
                                 processor.add_source(src_image);
                                 processor.add_exp_time(exp_time);
                             }
                             else
-                                spdlog::warn("[{}] source {} bounds does not match the destination skipping!", fx::label, i);
+                                spdlog::warn("[{}] source {} bounds does not match the destination, skipping!", fx::label, i + 1);
                         }
                         else
-                            spdlog::warn("[{}] source {} exposure time is {}, skipping!", fx::label, i, exp_time);
+                            OFX::throwSuiteStatusException(kOfxStatErrUnsupported);
                     }
                     else
-                        OFX::throwSuiteStatusException(kOfxStatErrUnsupported);
+                        spdlog::debug("[{}] source image is empty!", fx::label);
                 }
                 else
-                    spdlog::debug("[{}] source image is empty!", fx::label);
+                    spdlog::warn("[{}] source {} exposure time is not set (= {}), skipping!", fx::label, i + 1, exp_time);
             }
-            else
-                spdlog::debug("[{}] source clip {} is empty!", fx::label, i);
         }
 
         spdlog::debug("[{}] processing frame {}, render window ({}, {}, {}, {})", fx::label,
@@ -153,10 +152,8 @@ void Effect<ptype>::set_input_weights(int size)
     {
         _input_weights.resize(size);
 
-        const int half_depth = size / 2;
-
         for (int i = 0; i < size; ++i)
-            _input_weights[i] = i < half_depth ? i + 1.f : size - i;
+            _input_weights[i] = (float)std::min(i, size - 1 - i);
     }
 }
 
@@ -230,11 +227,11 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     samples_param->setDefault(100);
     samples_param->setDisplayRange(1, 100);
     samples_param->setParent(*advanced_group);
-    solver_param->appendOption("Debevec");
-    solver_param->appendOption("Robertson");
+    solver_param->appendOption("debevec");
+    solver_param->appendOption("robertson");
     solver_param->setDefault(0);
     solver_param->setParent(*advanced_group);
-    solver_param->setLabel("Solver");
+    solver_param->setLabel("solver");
     smoothness_param->setDefault(50);
     smoothness_param->setDisplayRange(1, 100);
     smoothness_param->setParent(*advanced_group);
