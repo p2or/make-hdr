@@ -84,7 +84,7 @@ endif()
 
 # -- Tests --
 enable_testing()
-add_executable(make_hdr_tests test/test_solvers.cpp)
+add_executable(make_hdr_tests test/tests.cpp)
 target_include_directories(make_hdr_tests PRIVATE ${ARMA_INCLUDE_DIRS} ${SPDLOG_INCLUDE_DIR})
 
 if(USE_ACCELERATE)

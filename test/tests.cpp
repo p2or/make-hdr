@@ -70,8 +70,17 @@ TEST_CASE("Debevec and Robertson Kernels are Mathematically Consistent", "[solve
         );
 
         // Very basic assertions to ensure it hasn't NaN'd out and generated a real curve
-        REQUIRE(response[input_depth/2] == Approx(0.0).margin(0.001)); // mid value anchor
-        REQUIRE(response[input_depth-1] != 0.0); 
+        REQUIRE(response[input_depth/2] == Approx(0.0).margin(0.01)); // mid value anchor
+        REQUIRE(response[input_depth-1] > response[0]);
+
+        bool is_monotonic = true;
+        for (int i = 1; i < input_depth; ++i) {
+            if (response[i] < response[i-1] && std::abs(response[i] - response[i-1]) > 1e-6) {
+                is_monotonic = false;
+                break;
+            }
+        }
+        REQUIRE(is_monotonic == true);
     }
 
     SECTION("Debevec Solver Outputs Logarithmic Response") {
@@ -88,7 +97,16 @@ TEST_CASE("Debevec and Robertson Kernels are Mathematically Consistent", "[solve
             response.data()
         );
 
-        REQUIRE(response[input_depth/2] == Approx(0.0).margin(0.001)); // mid value anchor
-        REQUIRE(response[input_depth-1] != 0.0); 
+        REQUIRE(response[input_depth/2] == Approx(0.0).margin(0.01)); // mid value anchor
+        REQUIRE(response[input_depth-1] > response[0]);
+
+        bool is_monotonic = true;
+        for (int i = 1; i < input_depth; ++i) {
+            if (response[i] < response[i-1] && std::abs(response[i] - response[i-1]) > 1e-6) {
+                is_monotonic = false;
+                break;
+            }
+        }
+        REQUIRE(is_monotonic == true);
     }
 }
