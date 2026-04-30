@@ -236,7 +236,7 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     solver_param->appendOption("Robertson");
     solver_param->setDefault(0);
     solver_param->setParent(*advanced_group);
-    solver_param->setLabel("solver math");
+    solver_param->setLabel("Solver");
     smoothness_param->setDefault(50);
     smoothness_param->setDisplayRange(1, 100);
     smoothness_param->setParent(*advanced_group);
