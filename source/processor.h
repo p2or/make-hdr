@@ -241,7 +241,8 @@ public:
     }
 
     // Robertson runs per-channel independently, producing divergent curve shapes
-    // on sparse linear data. Average them into one shared curve to eliminate tints.
+    // on sparse linear data. Average them into one shared curve to eliminate tints,
+    // then smooth to remove kinks from sparsely-sampled bins near highlights.
     void average_robertson_curves()
     {
         for (int m = 0; m < _input_depth; ++m)
@@ -253,6 +254,24 @@ public:
             for (int c = 0; c < CMP_MAX; ++c)
                 _effect.response(_input_depth, c)[m] = avg;
         }
+
+        const int radius = 4;
+        std::vector<double> smoothed(_input_depth);
+        double* curve = _effect.response(_input_depth, 0);
+        for (int m = 0; m < _input_depth; ++m)
+        {
+            double sum = 0.0;
+            int count = 0;
+            for (int k = std::max(0, m - radius); k <= std::min(_input_depth - 1, m + radius); ++k)
+            {
+                sum += curve[k];
+                ++count;
+            }
+            smoothed[m] = sum / count;
+        }
+        for (int m = 0; m < _input_depth; ++m)
+            for (int c = 0; c < CMP_MAX; ++c)
+                _effect.response(_input_depth, c)[m] = smoothed[m];
     }
 
     inline float lookup_response(int bin, int channel) const
