@@ -69,7 +69,7 @@ public:
                     float weight_sum = 0.f;
                     float response_log[3] = { 0.f, 0.f, 0.f };
                     float result[3] = { 0.f, 0.f, 0.f };
-                    float fallback[3] = { 0.f, 0.f, 0.f };
+                    float fallback_raw[3] = { 0.f, 0.f, 0.f };
                     float min_exp_log = FLT_MAX;
 
                     ptype* dst = (ptype*)_dstImg->getPixelAddress(x, y);
@@ -103,13 +103,13 @@ public:
 
                         weight_src /= CMP_MAX;
 
-                        // Track the darkest source as fallback for fully-clipped pixels
-                        // (shortest exposure = least likely to clip = best lower-bound estimate)
+                        // Track the darkest source as fallback for fully-clipped pixels.
+                        // Use raw (unclamped) values so color ratios are preserved above 1.0.
                         if (_exp_times_log[i] < min_exp_log)
                         {
                             min_exp_log = _exp_times_log[i];
                             for (int c = 0; c < CMP_MAX; ++c)
-                                fallback[c] = response_log[c] - _exp_times_log[i];
+                                fallback_raw[c] = std::max((float)src[c], 1e-6f);
                         }
 
                         for (int c = 0; c < CMP_MAX; ++c)
@@ -118,11 +118,11 @@ public:
                         weight_sum += weight_src;
                     }
 
-                    const float inv_w = weight_sum > 0.0f ? 1.f / weight_sum : 0.0f;
-
                     for (int c = 0; c < CMP_MAX; ++c)
                     {
-                        const float log_hdr = weight_sum > 0.0f ? result[c] * inv_w : fallback[c];
+                        const float log_hdr = weight_sum > 0.f
+                            ? result[c] / weight_sum
+                            : std::log(fallback_raw[c]) - min_exp_log;
                         const float hdr = std::exp(log_hdr);
                         dst[c] = (ptype)pow(hdr * (float)std::pow(2, _exposure), 1.f / _gamma);
                     }
