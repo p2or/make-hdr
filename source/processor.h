@@ -151,8 +151,6 @@ public:
             }
         }
 
-        _effect.set_regen_calib(true);
-
         if(!_effect.abort() && !_sources.empty())
             spdlog::info("[{}] {} sources merged in {}ms", fx::label, _sources.size(), _timer.get());
     }
@@ -172,6 +170,8 @@ public:
 
     void calibrate()
     {   
+        _effect.set_regen_calib(false);
+
         const float aspect = (float)_width / (float)_height;
         
         const int actual_samples = (_solver_type == 0) ? _samples : std::max(_samples * 100, 10000);
@@ -246,6 +246,8 @@ public:
 
     void calibrate_linear()
     {
+        _effect.set_regen_calib(false);
+
         for (int i = 0; i < _input_depth; ++i)
             _effect.response_linear()[i] = std::log(i * (1.f / _input_depth));
 

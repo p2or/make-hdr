@@ -41,7 +41,7 @@ void debevec_solver(const int channel,
     const int sources_size = (int)sources.size();
     const int samples_size = (int)points.size();
 
-    const int m = samples_size * sources_size + input_depth + 1;
+    const int m = samples_size * sources_size + (input_depth - 2) + 1;
     const int n = input_depth + samples_size;
 
     arma::mat a = arma::mat(m, n).zeros();
@@ -102,7 +102,7 @@ void debevec_solver(const int channel,
             response[i] = s[i];
     }
     else
-        spdlog::error("{}: Solver has faild for channel {}!", fx::label , channel);
+        spdlog::error("{}: Solver has failed for channel {}!", fx::label , channel);
 }
 
 template<typename ptype, typename ImageType>
