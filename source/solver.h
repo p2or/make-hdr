@@ -11,7 +11,10 @@
 #include "resources.h"
 
 template<typename ptype, typename ImageType>
-inline int extract_pixel_index(const std::shared_ptr<ImageType>& source, const fx::point& point, const int channel, const int input_depth)
+inline int extract_pixel_index(const std::shared_ptr<ImageType>& source, 
+            const fx::point& point, 
+            const int channel, 
+            const int input_depth)
 {
     ptype* sample = (ptype*)source->getPixelAddress(point.x, point.y);
     float sample_flt = sample == nullptr ? 0 : sample[channel];
@@ -177,20 +180,22 @@ void robertson_solver(const int channel,
         {
             if (sum_I_den[m] > 0.0)
                 I[m] = sum_I_num[m] / sum_I_den[m];
+            else
+                I[m] = -1.0; // Mark unobserved
         }
 
-        // Interpolate unobserved values to prevent jagged discontinuities
+        // Interpolate unobserved values in the Log-Domain
         int last_valid = -1;
         for (int m = 0; m < input_depth; ++m) {
-            if (sum_I_den[m] > 0.0) {
+            if (I[m] >= 0.0) {
                 if (last_valid == -1) {
                     for (int k = 0; k < m; ++k) I[k] = I[m] * ((double)k / std::max(1, m)); 
                 } else if (m - last_valid > 1) {
-                    double v0 = I[last_valid];
-                    double v1 = I[m];
+                    double v0 = std::log(std::max(1e-12, I[last_valid]));
+                    double v1 = std::log(std::max(1e-12, I[m]));
                     for (int k = last_valid + 1; k < m; ++k) {
                         double t = (double)(k - last_valid) / (m - last_valid);
-                        I[k] = v0 + t * (v1 - v0);
+                        I[k] = std::exp(v0 + t * (v1 - v0));
                     }
                 }
                 last_valid = m;
@@ -198,25 +203,14 @@ void robertson_solver(const int channel,
         }
         if (last_valid != -1 && last_valid < input_depth - 1) {
             for (int k = last_valid + 1; k < input_depth; ++k) {
-                I[k] = I[last_valid]; // Plateau extrapolation
+                I[k] = I[last_valid] * 1.001; // Slight extrapolation
             }
         }
 
-        // Apply a smoothing filter to enforce monotonicity and reduce noise
-        std::vector<double> I_smooth(input_depth, 0.0);
-        const int radius = 2; // 5-tap filter
-        for (int m = 0; m < input_depth; ++m) {
-            double sum = 0.0;
-            int count = 0;
-            for (int k = -radius; k <= radius; ++k) {
-                if (m + k >= 0 && m + k < input_depth) {
-                    sum += I[m + k];
-                    count++;
-                }
-            }
-            I_smooth[m] = sum / count;
+        // Enforce strict monotonicity (crucial to prevent color channel inversions)
+        for (int m = 1; m < input_depth; ++m) {
+            if (I[m] < I[m - 1]) I[m] = I[m - 1];
         }
-        I = I_smooth;
 
         // 3. Normalize to Mid-Value
         const double mid_val = I[input_depth / 2];
