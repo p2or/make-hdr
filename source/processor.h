@@ -32,27 +32,24 @@ public:
 
     virtual void preProcess()
     {
-        if (!_sources.empty())
+        if (_sources.empty())
         {
-            if (!_effect.abort())
-            {
-                if (_effect.regen_calib() || _effect.input_weights().empty())
-                {
-                    _effect.set_input_weights(_input_depth);
-
-                    if (_calibrate)
-                        calibrate();
-                    else
-                        calibrate_linear();
-                }
-                else
-                    spdlog::debug("[{}] calibrate skipped!", fx::label);
-            }
-            else
-                spdlog::debug("[{}] effect calibrate abort!", fx::label);
-        }
-        else
             spdlog::debug("[{}] sources are empty!", fx::label);
+            return;
+        }
+        if (_effect.abort())
+        {
+            spdlog::debug("[{}] effect calibrate abort!", fx::label);
+            return;
+        }
+        if (!_effect.regen_calib() && !_effect.input_weights().empty())
+        {
+            spdlog::debug("[{}] calibrate skipped!", fx::label);
+            return;
+        }
+
+        _effect.set_input_weights(_input_depth);
+        _calibrate ? calibrate() : calibrate_linear();
     }
 
     virtual void multiThreadProcessImages(OfxRectI proc_window)
@@ -85,20 +82,10 @@ public:
 
                         for (int c = 0; c < CMP_MAX; ++c)
                         {
-                            ptype sample = src[c];
-
-                            // Clamp 0 to 1
-                            sample = std::min<ptype>(sample, 1.f);
-                            sample = std::max<ptype>(sample, 0.f);
-
-                            const int src_int = (int)(sample * (_input_depth - 1));
-
-                            weight_src += _effect.input_weights()[src_int];
-                            
-                            if(_calibrate)
-                                response_log[c] = (float)_effect.response(_input_depth, c)[src_int];
-                            else
-                                response_log[c] = (float)_effect.response_linear()[src_int];
+                            const ptype sample = std::min<ptype>(std::max<ptype>(src[c], 0.f), 1.f);
+                            const int bin = (int)(sample * (_input_depth - 1));
+                            weight_src += _effect.input_weights()[bin];
+                            response_log[c] = lookup_response(bin, c);
                         }
 
                         weight_src /= CMP_MAX;
@@ -142,7 +129,7 @@ public:
                 }
             }
         }
-    };
+    }
 
     virtual void postProcess() 
     {
@@ -211,7 +198,7 @@ public:
             }
         }
            
-        std::thread* threads = new std::thread[CMP_MAX];
+        std::thread threads[CMP_MAX];
 
         for (int c = 0; c < CMP_MAX; ++c)
         {
@@ -224,7 +211,7 @@ public:
                                                         _sample_points,
                                                         _exp_times_log,
                                                         _effect.input_weights(),
-                                                        _effect.response(_input_depth, c));                                               
+                                                        _effect.response(_input_depth, c));
             }
             else // Robertson
             {
@@ -235,31 +222,15 @@ public:
                                                         _sample_points,
                                                         _exp_times,
                                                         _effect.input_weights(),
-                                                        _effect.response(_input_depth, c)); 
+                                                        _effect.response(_input_depth, c));
             }
         }
 
         for (int c = 0; c < CMP_MAX; ++c)
             threads[c].join();
 
-        delete[] threads;
-
-        // Robertson calibrates each channel independently from sparse linear data,
-        // causing per-channel curve shape divergence that produces color tints.
-        // Average the three curves into one shared curve to eliminate inter-channel drift
-        // while preserving the overall camera response shape.
         if (_solver_type == 1)
-        {
-            for (int m = 0; m < _input_depth; ++m)
-            {
-                double avg = 0.0;
-                for (int c = 0; c < CMP_MAX; ++c)
-                    avg += _effect.response(_input_depth, c)[m];
-                avg /= CMP_MAX;
-                for (int c = 0; c < CMP_MAX; ++c)
-                    _effect.response(_input_depth, c)[m] = avg;
-            }
-        }
+            average_robertson_curves();
     }
 
     void calibrate_linear()
@@ -270,6 +241,28 @@ public:
             _effect.response_linear()[i] = std::log(i * (1.f / _input_depth));
 
         _effect.response_linear()[0] = _effect.response_linear()[1];
+    }
+
+    // Robertson runs per-channel independently, producing divergent curve shapes
+    // on sparse linear data. Average them into one shared curve to eliminate tints.
+    void average_robertson_curves()
+    {
+        for (int m = 0; m < _input_depth; ++m)
+        {
+            double avg = 0.0;
+            for (int c = 0; c < CMP_MAX; ++c)
+                avg += _effect.response(_input_depth, c)[m];
+            avg /= CMP_MAX;
+            for (int c = 0; c < CMP_MAX; ++c)
+                _effect.response(_input_depth, c)[m] = avg;
+        }
+    }
+
+    inline float lookup_response(int bin, int channel) const
+    {
+        return _calibrate
+            ? (float)_effect.response(_input_depth, channel)[bin]
+            : (float)_effect.response_linear()[bin];
     }
 
     inline float luminance(float* rgb)
