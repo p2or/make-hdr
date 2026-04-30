@@ -75,7 +75,16 @@ void solver(const int channel,
         k++;
     }
 
-    const bool success = lapack::solve(s.memptr(), a.memptr(), b.memptr(), m, n);
+    bool success = arma::solve(s, a, b);
+    
+    // Fallback to SVD pseudo-inverse if the system is singular or ill-conditioned
+    if (!success)
+    {
+        arma::mat a_pinv;
+        success = arma::pinv(a_pinv, a);
+        if (success)
+            s = a_pinv * b;
+    }
 
     if (success)
     {
@@ -206,7 +215,7 @@ public:
         ptype* dst = (ptype*)_dstImg->getPixelData();
 
         for (int i = 0; i < pixel_size(); i += _components)
-            _luminance_max = max(luminance(dst + i), _luminance_max);
+            _luminance_max = std::max(luminance(dst + i), _luminance_max);
 
         for (int i = 0; i < pixel_size(); i += _components)
         {

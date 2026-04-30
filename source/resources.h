@@ -17,16 +17,11 @@
 
 #include "spdlog/spdlog.h"
 
-#define ARMA_DONT_USE_BLAS
-#define ARMA_DONT_USE_LAPACK
 #include "armadillo"
 
 #include "ofxsImageEffect.h"
 #include "ofxsMultiThread.h"
 #include "ofxsProcessing.H"
-
-#undef small // bloody microsoft
-#include "solve.h"
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 2
