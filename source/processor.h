@@ -225,6 +225,23 @@ public:
             threads[c].join();
 
         delete[] threads;
+
+        // Robertson calibrates each channel independently from sparse linear data,
+        // causing per-channel curve shape divergence that produces color tints.
+        // Average the three curves into one shared curve to eliminate inter-channel drift
+        // while preserving the overall camera response shape.
+        if (_solver_type == 1)
+        {
+            for (int m = 0; m < _input_depth; ++m)
+            {
+                double avg = 0.0;
+                for (int c = 0; c < CMP_MAX; ++c)
+                    avg += _effect.response(_input_depth, c)[m];
+                avg /= CMP_MAX;
+                for (int c = 0; c < CMP_MAX; ++c)
+                    _effect.response(_input_depth, c)[m] = avg;
+            }
+        }
     }
 
     void calibrate_linear()
