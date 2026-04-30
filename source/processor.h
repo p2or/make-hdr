@@ -66,7 +66,7 @@ public:
 
                 for (int x = proc_window.x1; x < proc_window.x2; ++x)
                 {
-                    float weight_sum = 0.f;
+                    float weight_sum[3] = { 0.f, 0.f, 0.f };
                     float response_log[3] = { 0.f, 0.f, 0.f };
                     float result[3] = { 0.f, 0.f, 0.f };
 
@@ -79,7 +79,7 @@ public:
                         if (src == nullptr)
                             return;
 
-                        float weight_src = 0.f;
+                        float weight_src[3] = { 0.f, 0.f, 0.f };
 
                         for (int c = 0; c < CMP_MAX; ++c)
                         {
@@ -91,7 +91,7 @@ public:
 
                             const int src_int = (int)(sample * (_input_depth - 1));
 
-                            weight_src += _effect.input_weights()[src_int];
+                            weight_src[c] = _effect.input_weights()[src_int];
                             
                             if(_calibrate)
                                 response_log[c] = (float)_effect.response(_input_depth, c)[src_int];
@@ -99,19 +99,16 @@ public:
                                 response_log[c] = (float)_effect.response_linear()[src_int];
                         }
 
-                        weight_src /= CMP_MAX;
-
-                        for (int c = 0; c < CMP_MAX; ++c)
-                            result[c] += weight_src * (response_log[c] - _exp_times_log[i]);
-
-                        weight_sum += weight_src;
+                        for (int c = 0; c < CMP_MAX; ++c) {
+                            result[c] += weight_src[c] * (response_log[c] - _exp_times_log[i]);
+                            weight_sum[c] += weight_src[c];
+                        }
                     }
-
-                    weight_sum = 1.f / weight_sum;
 
                     for (int c = 0; c < CMP_MAX; ++c)
                     {
-                        const float hdr = std::exp(result[c] * weight_sum);
+                        const float inv_w = weight_sum[c] > 0.0f ? 1.f / weight_sum[c] : 0.0f;
+                        const float hdr = std::exp(result[c] * inv_w);
                         dst[c] = (ptype)pow(hdr * (float)std::pow(2, _exposure), 1.f / _gamma);
                     }
 
