@@ -69,6 +69,8 @@ public:
                     float weight_sum = 0.f;
                     float response_log[3] = { 0.f, 0.f, 0.f };
                     float result[3] = { 0.f, 0.f, 0.f };
+                    float fallback[3] = { 0.f, 0.f, 0.f };
+                    float min_exp_log = FLT_MAX;
 
                     ptype* dst = (ptype*)_dstImg->getPixelAddress(x, y);
 
@@ -101,6 +103,15 @@ public:
 
                         weight_src /= CMP_MAX;
 
+                        // Track the darkest source as fallback for fully-clipped pixels
+                        // (shortest exposure = least likely to clip = best lower-bound estimate)
+                        if (_exp_times_log[i] < min_exp_log)
+                        {
+                            min_exp_log = _exp_times_log[i];
+                            for (int c = 0; c < CMP_MAX; ++c)
+                                fallback[c] = response_log[c] - _exp_times_log[i];
+                        }
+
                         for (int c = 0; c < CMP_MAX; ++c)
                             result[c] += weight_src * (response_log[c] - _exp_times_log[i]);
 
@@ -111,7 +122,8 @@ public:
 
                     for (int c = 0; c < CMP_MAX; ++c)
                     {
-                        const float hdr = std::exp(result[c] * inv_w);
+                        const float log_hdr = weight_sum > 0.0f ? result[c] * inv_w : fallback[c];
+                        const float hdr = std::exp(log_hdr);
                         dst[c] = (ptype)pow(hdr * (float)std::pow(2, _exposure), 1.f / _gamma);
                     }
 
