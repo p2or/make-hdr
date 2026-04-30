@@ -4,16 +4,14 @@
 template <class ptype>
 void Effect<ptype>::changedParam(const OFX::InstanceChangedArgs& args, const std::string& param_name)
 {
-    if (param_name == "exposure" ||
-        param_name == "gamma" ||
-        param_name == "highlights" ||
-        param_name == "show_samples" ||
-        param_name == "log_level")
+    if (param_name != "exposure" &&
+        param_name != "gamma" &&
+        param_name != "highlights" &&
+        param_name != "show_samples" &&
+        param_name != "log_level")
     {
-        _regen_calib = false;
-    }
-    else
         _regen_calib = true;
+    }
 }
 
 template <class ptype>
