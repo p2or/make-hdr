@@ -10,6 +10,7 @@
 
 #include "resources.h"
 
+
 template<typename ptype, typename ImageType>
 inline int extract_pixel_index(const std::shared_ptr<ImageType>& source, 
             const fx::point& point, 
@@ -18,7 +19,6 @@ inline int extract_pixel_index(const std::shared_ptr<ImageType>& source,
 {
     ptype* sample = (ptype*)source->getPixelAddress(point.x, point.y);
     float sample_flt = sample == nullptr ? 0 : sample[channel];
-    // Clamp 0 to 1
     sample_flt = std::min<float>(sample_flt, 1.f);
     sample_flt = std::max<float>(sample_flt, 0.f);
 
@@ -35,8 +35,8 @@ void debevec_solver(const int channel,
             const std::vector<float>& input_weights,
             double* response)
 {   
-    // Implements Paul E. Debevec & Jitendra Malik, 1997
-    // "Recovering High Dynamic Range Radiance Maps from Photographs"
+    /// Implements Paul E. Debevec & Jitendra Malik, 1997
+    /// "Recovering High Dynamic Range Radiance Maps from Photographs"
 
     const int sources_size = (int)sources.size();
     const int samples_size = (int)points.size();
@@ -115,8 +115,8 @@ void robertson_solver(const int channel,
                       const std::vector<float>& input_weights,
                       double* response)
 {
-    // Implements Mark A. Robertson et al., 1999
-    // "Dynamic Range Improvement Through Multiple Exposures"
+    /// Implements Mark A. Robertson et al., 1999
+    /// "Dynamic Range Improvement Through Multiple Exposures"
 
     const int sources_size = (int)sources.size();
     const int samples_size = (int)points.size();

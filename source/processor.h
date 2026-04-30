@@ -240,9 +240,9 @@ public:
         _effect.response_linear()[0] = _effect.response_linear()[1];
     }
 
-    // Robertson runs per-channel independently, producing divergent curve shapes
-    // on sparse linear data. Average them into one shared curve to eliminate tints,
-    // then smooth to remove kinks from sparsely-sampled bins near highlights.
+    /// Robertson runs per-channel independently, producing divergent curve shapes
+    /// on sparse linear data. Average them into one shared curve to eliminate tints,
+    /// then smooth to remove kinks from sparsely-sampled bins near highlights.
     void average_robertson_curves()
     {
         for (int m = 0; m < _input_depth; ++m)
