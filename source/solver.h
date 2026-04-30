@@ -179,6 +179,45 @@ void robertson_solver(const int channel,
                 I[m] = sum_I_num[m] / sum_I_den[m];
         }
 
+        // Interpolate unobserved values to prevent jagged discontinuities
+        int last_valid = -1;
+        for (int m = 0; m < input_depth; ++m) {
+            if (sum_I_den[m] > 0.0) {
+                if (last_valid == -1) {
+                    for (int k = 0; k < m; ++k) I[k] = I[m] * ((double)k / std::max(1, m)); 
+                } else if (m - last_valid > 1) {
+                    double v0 = I[last_valid];
+                    double v1 = I[m];
+                    for (int k = last_valid + 1; k < m; ++k) {
+                        double t = (double)(k - last_valid) / (m - last_valid);
+                        I[k] = v0 + t * (v1 - v0);
+                    }
+                }
+                last_valid = m;
+            }
+        }
+        if (last_valid != -1 && last_valid < input_depth - 1) {
+            for (int k = last_valid + 1; k < input_depth; ++k) {
+                I[k] = I[last_valid]; // Plateau extrapolation
+            }
+        }
+
+        // Apply a smoothing filter to enforce monotonicity and reduce noise
+        std::vector<double> I_smooth(input_depth, 0.0);
+        const int radius = 2; // 5-tap filter
+        for (int m = 0; m < input_depth; ++m) {
+            double sum = 0.0;
+            int count = 0;
+            for (int k = -radius; k <= radius; ++k) {
+                if (m + k >= 0 && m + k < input_depth) {
+                    sum += I[m + k];
+                    count++;
+                }
+            }
+            I_smooth[m] = sum / count;
+        }
+        I = I_smooth;
+
         // 3. Normalize to Mid-Value
         const double mid_val = I[input_depth / 2];
         if (mid_val > 0.0)
