@@ -194,10 +194,10 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     OFX::GroupParamDescriptor* advanced_group = desc.defineGroupParam("advanced");
 
     OFX::BooleanParamDescriptor* calibrate_param = desc.defineBooleanParam("calibrate");
+    OFX::BooleanParamDescriptor* use_middle_gray_param = desc.defineBooleanParam("use_middle_gray");
     OFX::DoubleParamDescriptor* exposure_param = desc.defineDoubleParam("exposure");
     OFX::DoubleParamDescriptor* gamma_param = desc.defineDoubleParam("gamma");
     OFX::DoubleParamDescriptor* highlights_param = desc.defineDoubleParam("highlights");
-    OFX::BooleanParamDescriptor* use_middle_gray_param = desc.defineBooleanParam("use_middle_gray");
     OFX::RGBAParamDescriptor* middle_gray_param = desc.defineRGBAParam("middle_gray");
     OFX::BooleanParamDescriptor* show_samples_param = desc.defineBooleanParam("show_samples");
     OFX::IntParamDescriptor* samples_param = desc.defineIntParam("samples");
@@ -236,7 +236,7 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
 
     middle_gray_param->setDefault(0.18, 0.18, 0.18, 1.0);
     middle_gray_param->setLabel("middle gray");
-    middle_gray_param->setHint("Pick the reference gray patch from the scene (e.g. a color checker). The plugin scales the merged image so the luminance of the picked color maps to 0.18 linear.");
+    middle_gray_param->setHint("Pick the reference gray patch from the scene (e.g. a color checker). The plugin scales the merged image so the luminance of the picked color matches the scene average.");
     middle_gray_param->setEnabled(false);
     middle_gray_param->setParent(*tone_mapping_group);
 
