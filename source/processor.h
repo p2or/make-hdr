@@ -133,14 +133,42 @@ public:
 
         ptype* dst = (ptype*)_dstImg->getPixelData();
 
-        for (int i = 0; i < pixel_size(); i += _components)
-            _luminance_max = std::max(luminance(dst + i), _luminance_max);
-
-        const float log_lum_max = std::log10(1.f + _luminance_max);
+        // Pass 1: compute log-average luminance (geometric mean) and scene maximum
+        // L_avg = exp( mean( log(ε + L_i) ) )  [Reinhard 2002, eq. 1]
+        double log_sum = 0.0;
+        int pixel_count = 0;
         for (int i = 0; i < pixel_size(); i += _components)
         {
             const float lum = luminance(dst + i);
-            if (lum == 0.f || _luminance_max == 0.f)
+            _luminance_max = std::max(lum, _luminance_max);
+            if (lum > 0.f)
+            {
+                log_sum += std::log(1e-6f + lum);
+                ++pixel_count;
+            }
+        }
+
+        // Pre-scaling: map log-average to target middle gray
+        // key_scale = a / L_avg  where a is the user-controlled middle-gray target (default 0.18).
+        // Multiplying every pixel by key_scale ensures the perceptual mid-tone of the scene
+        // lands at 0.18 before tone mapping, giving a balanced starting point regardless
+        // of absolute scene brightness.  Exposure then acts as a manual EV shift on top.
+        const float log_avg = pixel_count > 0 ? (float)std::exp(log_sum / pixel_count) : 1.f;
+        const float key_scale = log_avg > 0.f ? _middle_gray / log_avg : 1.f;
+        const float scaled_lum_max = _luminance_max * key_scale;
+        const float log_lum_max = std::log10(1.f + scaled_lum_max);
+
+        // Pass 2: Reinhard global tone mapping
+        // L_d = log10(1 + L_scaled) / log10(1 + L_max_scaled)  [display luminance]
+        // C_d = L_d * C / L  [per-channel, preserves hue]
+        // highlights blends between fully tone-mapped (0) and linear (1)
+        for (int i = 0; i < pixel_size(); i += _components)
+        {
+            for (int c = 0; c < CMP_MAX; ++c)
+                dst[i + c] *= key_scale;
+
+            const float lum = luminance(dst + i);
+            if (lum == 0.f || scaled_lum_max == 0.f)
                 continue;
 
             const float lum_dif = std::log10(1.f + lum) / log_lum_max;
@@ -167,6 +195,7 @@ public:
         _solver_type = _effect.solver_type(time);
         _smoothness = _effect.smoothness(time);
         _input_depth = _effect.input_depth(time);
+        _middle_gray = _effect.middle_gray(time);
     }
 
     void calibrate()
@@ -323,6 +352,7 @@ private:
     int _input_depth = 0;
 
     float _luminance_max = 0;
+    float _middle_gray = 0;
 
     Effect<ptype>& _effect;
 };

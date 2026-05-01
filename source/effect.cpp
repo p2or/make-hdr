@@ -7,6 +7,7 @@ void Effect<ptype>::changedParam(const OFX::InstanceChangedArgs& args, const std
     if (param_name != "exposure" &&
         param_name != "gamma" &&
         param_name != "highlights" &&
+        param_name != "middle_gray" &&
         param_name != "show_samples" &&
         param_name != "log_level")
     {
@@ -188,6 +189,7 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     OFX::DoubleParamDescriptor* exposure_param = desc.defineDoubleParam("exposure");
     OFX::DoubleParamDescriptor* gamma_param = desc.defineDoubleParam("gamma");
     OFX::DoubleParamDescriptor* highlights_param = desc.defineDoubleParam("highlights");
+    OFX::DoubleParamDescriptor* middle_gray_param = desc.defineDoubleParam("middle_gray");
     OFX::BooleanParamDescriptor* show_samples_param = desc.defineBooleanParam("show_samples");
     OFX::IntParamDescriptor* samples_param = desc.defineIntParam("samples");
     OFX::ChoiceParamDescriptor* solver_param = desc.defineChoiceParam("solver");
@@ -213,7 +215,14 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     highlights_param->setDefault(1.0);
     highlights_param->setDisplayRange(0, 1);
     highlights_param->setParent(*tone_mapping_group);
-    
+
+    middle_gray_param->setDefault(0.18);
+    middle_gray_param->setRange(0.01, 1.0);
+    middle_gray_param->setDisplayRange(0.01, 1.0);
+    middle_gray_param->setLabel("target middle gray");
+    middle_gray_param->setHint("Target log-average luminance. Normalises scene brightness so 0.18 gives a perceptually balanced starting point. Applied before exposure.");
+    middle_gray_param->setParent(*tone_mapping_group);
+
     show_samples_param->setDefault(false);
     show_samples_param->setParent(*advanced_group);
     show_samples_param->setLabel("show samples");

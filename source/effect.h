@@ -61,6 +61,7 @@ public:
     float gamma(const double& time) { return (float)_gamma->getValueAtTime(time); }
     float highlights(const double& time) { return (float)_highlights->getValueAtTime(time); }
     bool calibrate(const double& time) { bool val; _calibrate->getValueAtTime(time, val); return val; }
+    float middle_gray(const double& time) { return (float)_middle_gray->getValueAtTime(time); }
     bool show_samples(const double& time) { bool val; _show_samples->getValueAtTime(time, val); return val; }
     int samples(const double& time) { return _samples->getValueAtTime(time); }
     int solver_type(const double& time) { int type; _solver->getValueAtTime(time, type); return type; }
@@ -88,6 +89,7 @@ protected:
     OFX::DoubleParam* _gamma = fetchDoubleParam("gamma");
     OFX::DoubleParam* _highlights = fetchDoubleParam("highlights");
     OFX::BooleanParam* _calibrate = fetchBooleanParam("calibrate");
+    OFX::DoubleParam* _middle_gray = fetchDoubleParam("middle_gray");
     OFX::BooleanParam* _show_samples = fetchBooleanParam("show_samples");
     OFX::IntParam* _samples = fetchIntParam("samples");
     OFX::DoubleParam* _smoothness = fetchDoubleParam("smoothness");
