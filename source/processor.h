@@ -133,17 +133,29 @@ public:
 
         ptype* dst = (ptype*)_dstImg->getPixelData();
 
-        // Pass 1: compute log-average luminance (geometric mean) and scene maximum
-        // L_avg = exp( mean( log(ε + L_i) ) )  [Reinhard 2002, eq. 1]
+        // Pass 1: compute log-average of linear luminance and gamma-encoded scene maximum.
+        // L_avg = exp( mean( log(ε + L_linear_i) ) )  [Reinhard 2002, eq. 1]
+        //
+        // dst currently holds hdr^(1/gamma) (gamma-encoded, no exposure).
+        // _luminance_max is kept in gamma-encoded space for Reinhard consistency in Pass 2.
+        // For the geometric mean, linear luminance must be recovered by undoing gamma per channel:
+        //   lum_linear = 0.2126*R^gamma + 0.7152*G^gamma + 0.0722*B^gamma
+        // This is exact regardless of gamma — lum(x^(1/gamma)) != lum(x)^(1/gamma) in general
+        // because luminance is a weighted sum, not a scalar, so the power does not commute.
         double log_sum = 0.0;
         int pixel_count = 0;
         for (int i = 0; i < pixel_size(); i += _components)
         {
             const float lum = luminance(dst + i);
             _luminance_max = std::max(lum, _luminance_max);
-            if (lum > 0.f)
+
+            const float r_lin = std::pow(std::max(0.f, dst[i + fx::ch::r]), _gamma);
+            const float g_lin = std::pow(std::max(0.f, dst[i + fx::ch::g]), _gamma);
+            const float b_lin = std::pow(std::max(0.f, dst[i + fx::ch::b]), _gamma);
+            const float lum_lin = 0.212671f * r_lin + 0.71516f * g_lin + 0.072169f * b_lin;
+            if (lum_lin > 0.f)
             {
-                log_sum += std::log(1e-6f + lum);
+                log_sum += std::log(1e-6f + lum_lin);
                 ++pixel_count;
             }
         }
@@ -151,22 +163,16 @@ public:
         // Pre-scaling: combine middle-gray normalisation and exposure into one pixel-space scale.
         //
         // Goal: final pixel = pow(hdr * key_scale * 2^exposure, 1/gamma)
-        //   where key_scale = middle_gray / geometric_mean(lum_raw)  [Reinhard 2002, eq. 2]
+        //   where key_scale = middle_gray / lum_linear_avg  [Reinhard 2002, eq. 2]
+        //   and middle_gray = 0.18 refers to linear light.
         //
-        // Because dst currently holds hdr^(1/gamma) (no exposure yet), multiplying by
-        //   pixel_scale = (key_scale * 2^exposure)^(1/gamma)
-        // gives: hdr^(1/gamma) * (key_scale * 2^exposure)^(1/gamma)
-        //      = pow(hdr * key_scale * 2^exposure, 1/gamma)  -- identical to original formula.
-        //
-        // log_avg here is geometric_mean(lum(hdr^(1/gamma))) = geometric_mean(lum_raw)^(1/gamma),
-        // so (middle_gray / log_avg)^(1/gamma) = key_scale^(1/gamma) in pixel space, and we get:
-        //   pixel_scale = pow(middle_gray * 2^exposure, 1/gamma) / log_avg
-        //
-        // Exposure and middle_gray are now fully independent: changing exposure shifts
-        // pow(2^exposure, 1/gamma) while log_avg (derived from un-exposed hdr^(1/gamma)) is fixed.
-        const float log_avg = pixel_count > 0 ? std::exp((float)(log_sum / pixel_count)) : 1.f;
-        const float pixel_scale = log_avg > 0.f
-            ? std::pow(_middle_gray * std::pow(2.f, _exposure), 1.f / _gamma) / log_avg
+        // Because dst holds hdr^(1/gamma), multiplying by
+        //   pixel_scale = pow(middle_gray * 2^exposure / lum_linear_avg, 1/gamma)
+        // gives: hdr^(1/gamma) * pow(key_scale * 2^exposure, 1/gamma)
+        //      = pow(hdr * key_scale * 2^exposure, 1/gamma)  -- exact, any gamma.
+        const float lum_linear_avg = pixel_count > 0 ? std::exp((float)(log_sum / pixel_count)) : 1.f;
+        const float pixel_scale = lum_linear_avg > 0.f
+            ? std::pow(_middle_gray * std::pow(2.f, _exposure) / lum_linear_avg, 1.f / _gamma)
             : 1.f;
         const float scaled_lum_max = _luminance_max * pixel_scale;
         const float log_lum_max = std::log10(1.f + scaled_lum_max);
