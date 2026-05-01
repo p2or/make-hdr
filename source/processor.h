@@ -133,15 +133,14 @@ public:
 
         ptype* dst = (ptype*)_dstImg->getPixelData();
 
-        // Pass 1: compute log-average of linear luminance and gamma-encoded scene maximum.
+        // Pass 1: scene maximum (always needed for Reinhard) and, when middle gray is
+        // enabled, log-average of linear luminance for normalisation.
         // L_avg = exp( mean( log(ε + L_linear_i) ) )  [Reinhard 2002, eq. 1]
         //
         // dst currently holds hdr^(1/gamma) (gamma-encoded, no exposure).
-        // _luminance_max is kept in gamma-encoded space for Reinhard consistency in Pass 2.
-        // For the geometric mean, linear luminance must be recovered by undoing gamma per channel:
+        // For the geometric mean, linear luminance is recovered per channel before weighting:
         //   lum_linear = 0.2126*R^gamma + 0.7152*G^gamma + 0.0722*B^gamma
-        // This is exact regardless of gamma — lum(x^(1/gamma)) != lum(x)^(1/gamma) in general
-        // because luminance is a weighted sum, not a scalar, so the power does not commute.
+        // This is exact at any gamma — lum(x^(1/gamma)) != lum(x)^(1/gamma) in general.
         double log_sum = 0.0;
         int pixel_count = 0;
         for (int i = 0; i < pixel_size(); i += _components)
@@ -149,31 +148,41 @@ public:
             const float lum = luminance(dst + i);
             _luminance_max = std::max(lum, _luminance_max);
 
-            const float r_lin = std::pow(std::max(0.f, dst[i + fx::ch::r]), _gamma);
-            const float g_lin = std::pow(std::max(0.f, dst[i + fx::ch::g]), _gamma);
-            const float b_lin = std::pow(std::max(0.f, dst[i + fx::ch::b]), _gamma);
-            const float lum_lin = 0.212671f * r_lin + 0.71516f * g_lin + 0.072169f * b_lin;
-            if (lum_lin > 0.f)
+            if (_use_middle_gray)
             {
-                log_sum += std::log(1e-6f + lum_lin);
-                ++pixel_count;
+                const float r_lin = std::pow(std::max(0.f, dst[i + fx::ch::r]), _gamma);
+                const float g_lin = std::pow(std::max(0.f, dst[i + fx::ch::g]), _gamma);
+                const float b_lin = std::pow(std::max(0.f, dst[i + fx::ch::b]), _gamma);
+                const float lum_lin = 0.212671f * r_lin + 0.71516f * g_lin + 0.072169f * b_lin;
+                if (lum_lin > 0.f)
+                {
+                    log_sum += std::log(1e-6f + lum_lin);
+                    ++pixel_count;
+                }
             }
         }
 
-        // Pre-scaling: combine middle-gray normalisation and exposure into one pixel-space scale.
+        // Pre-scaling: exposure only, or combined middle-gray normalisation + exposure.
         //
-        // Goal: final pixel = pow(hdr * key_scale * 2^exposure, 1/gamma)
-        //   where key_scale = middle_gray / lum_linear_avg  [Reinhard 2002, eq. 2]
-        //   and middle_gray = 0.18 refers to linear light.
+        // When middle gray is OFF (backwards-compatible mode):
+        //   pixel_scale = pow(2^exposure, 1/gamma)
+        //   result = pow(hdr * 2^exposure, 1/gamma)  -- original formula.
         //
-        // Because dst holds hdr^(1/gamma), multiplying by
+        // When middle gray is ON:
         //   pixel_scale = pow(middle_gray * 2^exposure / lum_linear_avg, 1/gamma)
-        // gives: hdr^(1/gamma) * pow(key_scale * 2^exposure, 1/gamma)
-        //      = pow(hdr * key_scale * 2^exposure, 1/gamma)  -- exact, any gamma.
-        const float lum_linear_avg = pixel_count > 0 ? std::exp((float)(log_sum / pixel_count)) : 1.f;
-        const float pixel_scale = lum_linear_avg > 0.f
-            ? std::pow(_middle_gray * std::pow(2.f, _exposure) / lum_linear_avg, 1.f / _gamma)
-            : 1.f;
+        //   result = pow(hdr * key_scale * 2^exposure, 1/gamma)  -- exact, any gamma.
+        float pixel_scale;
+        if (_use_middle_gray)
+        {
+            const float lum_linear_avg = pixel_count > 0 ? std::exp((float)(log_sum / pixel_count)) : 1.f;
+            pixel_scale = lum_linear_avg > 0.f
+                ? std::pow(_middle_gray * std::pow(2.f, _exposure) / lum_linear_avg, 1.f / _gamma)
+                : 1.f;
+        }
+        else
+        {
+            pixel_scale = std::pow(std::pow(2.f, _exposure), 1.f / _gamma);
+        }
         const float scaled_lum_max = _luminance_max * pixel_scale;
         const float log_lum_max = std::log10(1.f + scaled_lum_max);
 
@@ -214,6 +223,7 @@ public:
         _solver_type = _effect.solver_type(time);
         _smoothness = _effect.smoothness(time);
         _input_depth = _effect.input_depth(time);
+        _use_middle_gray = _effect.use_middle_gray(time);
         _middle_gray = _effect.middle_gray(time);
     }
 
@@ -371,6 +381,7 @@ private:
     int _input_depth = 0;
 
     float _luminance_max = 0;
+    bool _use_middle_gray = false;
     float _middle_gray = 0;
 
     Effect<ptype>& _effect;

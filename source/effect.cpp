@@ -7,11 +7,19 @@ void Effect<ptype>::changedParam(const OFX::InstanceChangedArgs& args, const std
     if (param_name != "exposure" &&
         param_name != "gamma" &&
         param_name != "highlights" &&
+        param_name != "use_middle_gray" &&
         param_name != "middle_gray" &&
         param_name != "show_samples" &&
         param_name != "log_level")
     {
         _regen_calib = true;
+    }
+
+    if (param_name == "use_middle_gray")
+    {
+        bool use;
+        _use_middle_gray->getValue(use);
+        _middle_gray->setIsSecret(!use);
     }
 }
 
@@ -189,6 +197,7 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     OFX::DoubleParamDescriptor* exposure_param = desc.defineDoubleParam("exposure");
     OFX::DoubleParamDescriptor* gamma_param = desc.defineDoubleParam("gamma");
     OFX::DoubleParamDescriptor* highlights_param = desc.defineDoubleParam("highlights");
+    OFX::BooleanParamDescriptor* use_middle_gray_param = desc.defineBooleanParam("use_middle_gray");
     OFX::DoubleParamDescriptor* middle_gray_param = desc.defineDoubleParam("middle_gray");
     OFX::BooleanParamDescriptor* show_samples_param = desc.defineBooleanParam("show_samples");
     OFX::IntParamDescriptor* samples_param = desc.defineIntParam("samples");
@@ -216,11 +225,17 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     highlights_param->setDisplayRange(0, 1);
     highlights_param->setParent(*tone_mapping_group);
 
+    use_middle_gray_param->setDefault(false);
+    use_middle_gray_param->setLabel("set middle gray");
+    use_middle_gray_param->setHint("Enable middle gray normalisation. When on, the merged image is scaled so its geometric mean luminance matches the target middle gray value.");
+    use_middle_gray_param->setParent(*tone_mapping_group);
+
     middle_gray_param->setDefault(0.18);
     middle_gray_param->setRange(0.01, 1.0);
     middle_gray_param->setDisplayRange(0.01, 1.0);
     middle_gray_param->setLabel("target middle gray");
     middle_gray_param->setHint("Target log-average luminance. Normalises scene brightness so 0.18 gives a perceptually balanced starting point. Applied before exposure.");
+    middle_gray_param->setIsSecret(true);
     middle_gray_param->setParent(*tone_mapping_group);
 
     show_samples_param->setDefault(false);
