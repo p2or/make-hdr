@@ -57,8 +57,8 @@ void debevec_solver(const int channel,
 
             const float wij = input_weights[sample_int];
 
-            // 1. Data Objective Function
-            // w(Z_ij) * g(Z_ij) - w(Z_ij) * ln(E_i) = w(Z_ij) * ln(dt_j)
+            /// 1. Data Objective Function
+            /// w(Z_ij) * g(Z_ij) - w(Z_ij) * ln(E_i) = w(Z_ij) * ln(dt_j)
             a.at(k, sample_int) = wij;
             a.at(k, input_depth + i) = -wij;
             b.at(k, 0) = wij * exp_times_log[j];
@@ -66,13 +66,13 @@ void debevec_solver(const int channel,
         }
     }
     
-    // 2. Mid-Value Constraint
-    // Fix the camera response curve scaling at the center point (g(Z_mid) = 0)
+    /// 2. Mid-Value Constraint
+    /// Fix the camera response curve scaling at the center point (g(Z_mid) = 0)
     a.at(k, input_depth / 2) = 1;
     k++;
 
-    // 3. Smoothness Objective Function
-    // Minimize the second derivative: lambda * w(z) * (g(z-1) - 2*g(z) + g(z+1)) = 0
+    /// 3. Smoothness Objective Function
+    /// Minimize the second derivative: lambda * w(z) * (g(z-1) - 2*g(z) + g(z+1)) = 0
     const float lambda = smoothness * (input_depth / 256.f);
 
     for (int i = 0; i < (input_depth - 2); ++i)
@@ -87,7 +87,7 @@ void debevec_solver(const int channel,
 
     bool success = arma::solve(s, a, b);
     
-    // Fallback to SVD pseudo-inverse if the system is singular or ill-conditioned
+    /// Fallback to SVD pseudo-inverse if the system is singular or ill-conditioned
     if (!success)
     {
         arma::mat a_pinv;
@@ -127,7 +127,7 @@ void robertson_solver(const int channel,
 
     std::vector<double> E(samples_size, 0.0);
 
-    // Precompute sample integers to avoid fetching pixel data during iterations
+    /// Precompute sample integers to avoid fetching pixel data during iterations
     std::vector<std::vector<int>> sample_ints(samples_size, std::vector<int>(sources_size));
     for (int i = 0; i < samples_size; ++i)
     {
@@ -139,8 +139,8 @@ void robertson_solver(const int channel,
 
     for (int iter = 0; iter < iterations; ++iter)
     {
-        // 1. Estimate irradiance E for each sample
-        // x_j = sum(w(y_ij) * t_i * I(y_ij)) / sum(w(y_ij) * t_i^2)
+        /// 1. Estimate irradiance E for each sample
+        /// x_j = sum(w(y_ij) * t_i * I(y_ij)) / sum(w(y_ij) * t_i^2)
         for (int i = 0; i < samples_size; ++i)
         {
             double sum_num = 0.0;
@@ -159,8 +159,8 @@ void robertson_solver(const int channel,
             E[i] = (sum_den > 0.0) ? (sum_num / sum_den) : 0.0;
         }
 
-        // 2. Update response function I
-        // I(m) = sum(t_i * x_j) / Card(y_ij = m)
+        /// 2. Update response function I
+        /// I(m) = sum(t_i * x_j) / Card(y_ij = m)
         std::vector<double> sum_I_num(input_depth, 0.0);
         std::vector<double> sum_I_den(input_depth, 0.0);
 
@@ -184,7 +184,7 @@ void robertson_solver(const int channel,
                 I[m] = -1.0; // Mark unobserved
         }
 
-        // Interpolate unobserved values in the Log-Domain
+        /// Interpolate unobserved values in the Log-Domain
         int last_valid = -1;
         for (int m = 0; m < input_depth; ++m) {
             if (I[m] >= 0.0) {
@@ -207,12 +207,12 @@ void robertson_solver(const int channel,
             }
         }
 
-        // Enforce strict monotonicity (crucial to prevent color channel inversions)
+        /// Enforce strict monotonicity (crucial to prevent color channel inversions)
         for (int m = 1; m < input_depth; ++m) {
             if (I[m] < I[m - 1]) I[m] = I[m - 1];
         }
 
-        // 3. Normalize to Mid-Value
+        /// 3. Normalize to Mid-Value
         const double mid_val = I[input_depth / 2];
         if (mid_val > 0.0)
         {
@@ -221,7 +221,7 @@ void robertson_solver(const int channel,
         }
     }
 
-    // Output Logarithmic Response exactly like Debevec so processor logic stays identical
+    /// Output Logarithmic Response exactly like Debevec so processor logic stays identical
     for (int m = 0; m < input_depth; ++m)
     {
         if (I[m] <= 0.0)

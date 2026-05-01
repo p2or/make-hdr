@@ -89,9 +89,9 @@ public:
 
                     weight_src /= CMP_MAX;
 
-                    // Track the darkest source as fallback for fully-clipped pixels.
-                    // Use raw unclamped value when > 1.0 (genuine HDR in linear float),
-                    // otherwise use the response curve at bin 255 (clipped at camera max).
+                    /// Track the darkest source as fallback for fully-clipped pixels.
+                    /// Use raw unclamped value when > 1.0 (genuine HDR in linear float),
+                    /// otherwise use the response curve at bin 255 (clipped at camera max).
                     if (_exp_times_log[i] < min_exp_log)
                     {
                         min_exp_log = _exp_times_log[i];
@@ -133,13 +133,13 @@ public:
 
         ptype* dst = (ptype*)_dstImg->getPixelData();
 
-        // Pass 1: scene maximum (always needed for Reinhard) and, when middle gray is enabled, 
-        // log-average of linear luminance for normalisation.
-        // L_avg = exp( mean( log(ε + L_linear_i) ) )  [Reinhard 2002, eq. 1]
-        //
-        // dst currently holds hdr^(1/gamma) (gamma-encoded, no exposure).
-        // For the geometric mean, linear luminance is recovered per channel before weighting:
-        // lum_linear = 0.212671*R^gamma + 0.71516*G^gamma + 0.072169*B^gamma
+        /// Pass 1: scene maximum (always needed for Reinhard) and, when middle gray is enabled, 
+        /// log-average of linear luminance for normalisation.
+        ///   L_avg = exp( mean( log(ε + L_linear_i) ) )  [Reinhard 2002, eq. 1]
+        ///
+        /// dst currently holds hdr^(1/gamma) (gamma-encoded, no exposure).
+        /// For the geometric mean, linear luminance is recovered per channel before weighting:
+        ///   lum_linear = 0.212671*R^gamma + 0.71516*G^gamma + 0.072169*B^gamma
         double log_sum = 0.0;
         int pixel_count = 0;
         for (int i = 0; i < pixel_size(); i += _components)
@@ -161,15 +161,15 @@ public:
             }
         }
 
-        // Pre-scaling: exposure only, or combined middle-gray normalisation + exposure.
-        //
-        // When middle gray is OFF (backwards-compatible mode):
-        //   pixel_scale = pow(2^exposure, 1/gamma)
-        //   result = pow(hdr * 2^exposure, 1/gamma)  -- original formula.
-        //
-        // When middle gray is ON:
-        //   pixel_scale = pow(middle_gray * 2^exposure / lum_linear_avg, 1/gamma)
-        //   result = pow(hdr * middle_gray / lum_linear_avg * 2^exposure, 1/gamma)
+        /// Pre-scaling: exposure only, or combined middle-gray normalisation + exposure.
+        ///
+        /// When middle gray is OFF (backwards-compatible mode):
+        ///   pixel_scale = pow(2^exposure, 1/gamma)
+        ///   result = pow(hdr * 2^exposure, 1/gamma)  -- original formula.
+        ///
+        /// When middle gray is ON:
+        ///   pixel_scale = pow(middle_gray * 2^exposure / lum_linear_avg, 1/gamma)
+        ///   result = pow(hdr * middle_gray / lum_linear_avg * 2^exposure, 1/gamma)
         float pixel_scale;
         if (_use_middle_gray && _middle_gray > 0.f)
         {
@@ -185,11 +185,10 @@ public:
         const float scaled_lum_max = _luminance_max * pixel_scale;
         const float log_lum_max = std::log10(1.f + scaled_lum_max);
 
-        // Pass 2: Reinhard global tone mapping
-        // L_d = log10(1 + L_scaled) / log10(1 + L_max_scaled)  [display luminance]
-        // C_d = L_d * C / L  [per-channel, preserves hue]
-        //
-        // highlights blends between fully tone-mapped (0) and linear (1)
+        /// Pass 2: Reinhard global tone mapping
+        /// highlights blends between fully tone-mapped (0) and linear (1)
+        ///   L_d = log10(1 + L_scaled) / log10(1 + L_max_scaled)  [display luminance]
+        ///   C_d = L_d * C / L  [per-channel, preserves hue]
         for (int i = 0; i < pixel_size(); i += _components)
         {
             for (int c = 0; c < CMP_MAX; ++c)
@@ -315,8 +314,8 @@ public:
                 _effect.response(_input_depth, c)[m] = avg;
         }
 
-        // 3 passes of box-filter smoothing approximates a Gaussian kernel,
-        // handling broader plateau-type banding from sparsely-sampled highlight bins.
+        /// 3 passes of box-filter smoothing approximates a Gaussian kernel,
+        /// handling broader plateau-type banding from sparsely-sampled highlight bins.
         const int radius = 4;
         const int passes = 3;
         std::vector<double> smoothed(_input_depth);
