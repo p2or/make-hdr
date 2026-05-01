@@ -215,7 +215,7 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     calibrate_param->setParent(*exposure_times_group);
 
     use_middle_gray_param->setDefault(false);
-    use_middle_gray_param->setLabel("use middle gray");
+    use_middle_gray_param->setLabel("target middle gray");
     use_middle_gray_param->setHint("Enable middle gray normalisation. When on, the merged image is scaled so its geometric mean luminance matches the target middle gray value.");
     use_middle_gray_param->setParent(*tone_mapping_group);
 
