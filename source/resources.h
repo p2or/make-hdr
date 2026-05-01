@@ -14,6 +14,8 @@
 #include <chrono>
 #include <thread>
 #include <cfloat>
+#include <unordered_set>
+#include <cstdint>
 
 #include "spdlog/spdlog.h"
 
@@ -56,6 +58,8 @@ namespace fx
     
         int x;
         int y;
+
+        int64_t key() const { return (int64_t)x << 32 | (uint32_t)y; }
     };
 
     class timer

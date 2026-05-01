@@ -9,6 +9,8 @@
 #define effect_h
 
 #include "processor.h"
+#include <unordered_set>
+#include <cstdint>
 
 
 template <class ptype>
@@ -45,6 +47,7 @@ public:
     const std::vector<float>& input_weights() { return _input_weights; }
 
     std::vector<fx::point>& sample_points() { return _sample_points; }
+    std::unordered_set<int64_t>& sample_set() { return _sample_set; }
     
     void set_input_weights(int size);
 
@@ -75,6 +78,7 @@ protected:
     std::vector<double> _response;
     std::vector<double> _response_linear;
     std::vector<fx::point> _sample_points;
+    std::unordered_set<int64_t> _sample_set;
 
     OFX::Clip* _dst_clip;
     std::vector<OFX::Clip*> _src_clips;

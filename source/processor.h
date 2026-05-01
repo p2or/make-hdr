@@ -119,10 +119,8 @@ public:
                     dst[c] = (ptype)pow(hdr * (float)std::pow(2, _exposure), 1.f / _gamma);
                 }
 
-                if(_show_samples)
-                    for (const fx::point& point : _effect.sample_points())
-                        if (x == point.x && y == point.y)
-                            dst[fx::ch::g] = FLT_MAX;
+                if(_show_samples && _effect.sample_set().count(fx::point(x, y).key()))
+                    dst[fx::ch::g] = FLT_MAX;
 
                 dst[fx::ch::a] = 1.0f;
             }
@@ -138,13 +136,14 @@ public:
         for (int i = 0; i < pixel_size(); i += _components)
             _luminance_max = std::max(luminance(dst + i), _luminance_max);
 
+        const float log_lum_max = std::log10(1.f + _luminance_max);
         for (int i = 0; i < pixel_size(); i += _components)
         {
             const float lum = luminance(dst + i);
             if (lum == 0.f || _luminance_max == 0.f)
                 continue;
 
-            const float lum_dif = std::log10(1.f + lum) / std::log10(1.f + _luminance_max);
+            const float lum_dif = std::log10(1.f + lum) / log_lum_max;
 
             for (int c = 0; c < CMP_MAX; ++c)
             {
@@ -174,6 +173,7 @@ public:
     {   
         _effect.set_regen_calib(false);
         _effect.sample_points().clear();
+        _effect.sample_set().clear();
 
         const float aspect = (float)_width / (float)_height;
         
@@ -191,6 +191,7 @@ public:
                 if (0 <= x && x < _width && 0 <= y && y < _height)
                 {
                     _effect.sample_points().push_back(fx::point(x, y));
+                    _effect.sample_set().insert(fx::point(x, y).key());
                     spdlog::debug("{}: Getting sample pos({}, {})", fx::label, x, y);
                 }
             }
@@ -309,7 +310,7 @@ private:
 
     std::vector<float> _exp_times;
     std::vector<float> _exp_times_log;
-    std::vector <std::shared_ptr<OFX::Image>> _sources;
+    std::vector<std::shared_ptr<OFX::Image>> _sources;
 
     float _exposure = 0;
     float _gamma = 0;
