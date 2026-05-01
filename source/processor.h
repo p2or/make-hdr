@@ -116,7 +116,7 @@ public:
                         ? result[c] / weight_sum
                         : fallback_log[c];
                     const float hdr = std::exp(log_hdr);
-                    dst[c] = (ptype)pow(hdr * (float)std::pow(2, _exposure), 1.f / _gamma);
+                    dst[c] = (ptype)pow(hdr, 1.f / _gamma);
                 }
 
                 if(_show_samples && _effect.sample_set().count(fx::point(x, y).key()))
@@ -148,14 +148,27 @@ public:
             }
         }
 
-        // Pre-scaling: map log-average to target middle gray
-        // key_scale = a / L_avg  where a is the user-controlled middle-gray target (default 0.18).
-        // Multiplying every pixel by key_scale ensures the perceptual mid-tone of the scene
-        // lands at 0.18 before tone mapping, giving a balanced starting point regardless
-        // of absolute scene brightness.  Exposure then acts as a manual EV shift on top.
-        const float log_avg = pixel_count > 0 ? (float)std::exp(log_sum / pixel_count) : 1.f;
-        const float key_scale = log_avg > 0.f ? _middle_gray / log_avg : 1.f;
-        const float scaled_lum_max = _luminance_max * key_scale;
+        // Pre-scaling: combine middle-gray normalisation and exposure into one pixel-space scale.
+        //
+        // Goal: final pixel = pow(hdr * key_scale * 2^exposure, 1/gamma)
+        //   where key_scale = middle_gray / geometric_mean(lum_raw)  [Reinhard 2002, eq. 2]
+        //
+        // Because dst currently holds hdr^(1/gamma) (no exposure yet), multiplying by
+        //   pixel_scale = (key_scale * 2^exposure)^(1/gamma)
+        // gives: hdr^(1/gamma) * (key_scale * 2^exposure)^(1/gamma)
+        //      = pow(hdr * key_scale * 2^exposure, 1/gamma)  -- identical to original formula.
+        //
+        // log_avg here is geometric_mean(lum(hdr^(1/gamma))) = geometric_mean(lum_raw)^(1/gamma),
+        // so (middle_gray / log_avg)^(1/gamma) = key_scale^(1/gamma) in pixel space, and we get:
+        //   pixel_scale = pow(middle_gray * 2^exposure, 1/gamma) / log_avg
+        //
+        // Exposure and middle_gray are now fully independent: changing exposure shifts
+        // pow(2^exposure, 1/gamma) while log_avg (derived from un-exposed hdr^(1/gamma)) is fixed.
+        const float log_avg = pixel_count > 0 ? std::exp((float)(log_sum / pixel_count)) : 1.f;
+        const float pixel_scale = log_avg > 0.f
+            ? std::pow(_middle_gray * std::pow(2.f, _exposure), 1.f / _gamma) / log_avg
+            : 1.f;
+        const float scaled_lum_max = _luminance_max * pixel_scale;
         const float log_lum_max = std::log10(1.f + scaled_lum_max);
 
         // Pass 2: Reinhard global tone mapping
@@ -165,7 +178,7 @@ public:
         for (int i = 0; i < pixel_size(); i += _components)
         {
             for (int c = 0; c < CMP_MAX; ++c)
-                dst[i + c] *= key_scale;
+                dst[i + c] *= pixel_scale;
 
             const float lum = luminance(dst + i);
             if (lum == 0.f || scaled_lum_max == 0.f)
