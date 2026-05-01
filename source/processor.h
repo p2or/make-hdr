@@ -120,7 +120,7 @@ public:
                 }
 
                 if(_show_samples)
-                    for (auto point : _sample_points)
+                    for (const fx::point& point : _effect.sample_points())
                         if (x == point.x && y == point.y)
                             dst[fx::ch::g] = FLT_MAX;
 
@@ -173,6 +173,7 @@ public:
     void calibrate()
     {   
         _effect.set_regen_calib(false);
+        _effect.sample_points().clear();
 
         const float aspect = (float)_width / (float)_height;
         
@@ -189,7 +190,7 @@ public:
             {
                 if (0 <= x && x < _width && 0 <= y && y < _height)
                 {
-                    _sample_points.push_back(fx::point(x, y));
+                    _effect.sample_points().push_back(fx::point(x, y));
                     spdlog::debug("{}: Getting sample pos({}, {})", fx::label, x, y);
                 }
             }
@@ -205,7 +206,7 @@ public:
                                                         _input_depth,
                                                         _smoothness,
                                                         _sources,
-                                                        _sample_points,
+                                                        _effect.sample_points(),
                                                         _exp_times_log,
                                                         _effect.input_weights(),
                                                         _effect.response(_input_depth, c));
@@ -216,7 +217,7 @@ public:
                                                         _input_depth,
                                                         (int)_smoothness,
                                                         _sources,
-                                                        _sample_points,
+                                                        _effect.sample_points(),
                                                         _exp_times,
                                                         _effect.input_weights(),
                                                         _effect.response(_input_depth, c));
@@ -308,7 +309,6 @@ private:
 
     std::vector<float> _exp_times;
     std::vector<float> _exp_times_log;
-    std::vector<fx::point> _sample_points;
     std::vector <std::shared_ptr<OFX::Image>> _sources;
 
     float _exposure = 0;
