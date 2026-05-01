@@ -135,7 +135,7 @@ public:
 
         /// Pass 1: scene maximum (always needed for Reinhard) and, when middle gray is enabled, 
         /// log-average of linear luminance for normalisation.
-        ///   L_avg = exp( mean( log(ε + L_linear_i) ) )  [Reinhard 2002, eq. 1]
+        ///   L_avg = exp(mean(log(ε + L_linear_i))) [Reinhard 2002, eq. 1]
         ///
         /// dst currently holds hdr^(1/gamma) (gamma-encoded, no exposure).
         /// For the geometric mean, linear luminance is recovered per channel before weighting:
@@ -167,7 +167,7 @@ public:
         ///   pixel_scale = pow(2^exposure, 1/gamma)
         ///   result = pow(hdr * 2^exposure, 1/gamma)  -- original formula.
         ///
-        /// When middle gray is ON:
+        /// When middle gray is enabled:
         ///   pixel_scale = pow(middle_gray * 2^exposure / lum_linear_avg, 1/gamma)
         ///   result = pow(hdr * middle_gray / lum_linear_avg * 2^exposure, 1/gamma)
         float pixel_scale;
@@ -253,12 +253,12 @@ public:
                 }
             }
         }
-           
+        
         std::thread threads[CMP_MAX];
 
         for (int c = 0; c < CMP_MAX; ++c)
         {
-            if (_solver_type == 0) // Debevec
+            if (_solver_type == 0)
             {
                 threads[c] = std::thread(debevec_solver<ptype, OFX::Image>, c,
                                                         _input_depth,
@@ -269,7 +269,7 @@ public:
                                                         _effect.input_weights(),
                                                         _effect.response(_input_depth, c));
             }
-            else // Robertson
+            else if (_solver_type == 1)
             {
                 threads[c] = std::thread(robertson_solver<ptype, OFX::Image>, c,
                                                         _input_depth,
@@ -299,11 +299,11 @@ public:
         _effect.response_linear()[0] = _effect.response_linear()[1];
     }
 
-    /// Robertson runs per-channel independently, producing divergent curve shapes
-    /// on sparse linear data. Average them into one shared curve to eliminate tints,
-    /// then smooth to remove kinks from sparsely-sampled bins near highlights.
     void average_robertson_curves()
     {
+        /// Robertson runs per-channel independently, producing divergent curve shapes
+        /// on sparse linear data. Average them into one shared curve to eliminate tints,
+        /// then smooth to remove kinks from sparsely-sampled bins near highlights.
         for (int m = 0; m < _input_depth; ++m)
         {
             double avg = 0.0;

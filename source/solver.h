@@ -11,6 +11,8 @@
 #include "resources.h"
 
 
+/// Extracts the pixel value for a given point and channel, 
+/// returning an integer in the range [0, input_depth-1].
 template<typename ptype, typename ImageType>
 inline int extract_pixel_index(const std::shared_ptr<ImageType>& source, 
             const fx::point& point, 
@@ -25,6 +27,8 @@ inline int extract_pixel_index(const std::shared_ptr<ImageType>& source,
     return (int)(sample_flt * (input_depth - 1));
 }
 
+/// Implements Paul E. Debevec & Jitendra Malik, 1997
+/// "Recovering High Dynamic Range Radiance Maps from Photographs"
 template<typename ptype, typename ImageType>
 void debevec_solver(const int channel,
             const int input_depth,
@@ -34,9 +38,7 @@ void debevec_solver(const int channel,
             const std::vector<float>& exp_times_log,
             const std::vector<float>& input_weights,
             double* response)
-{   
-    /// Implements Paul E. Debevec & Jitendra Malik, 1997
-    /// "Recovering High Dynamic Range Radiance Maps from Photographs"
+{
 
     const int sources_size = (int)sources.size();
     const int samples_size = (int)points.size();
@@ -105,6 +107,8 @@ void debevec_solver(const int channel,
         spdlog::error("{}: Solver has failed for channel {}!", fx::label , channel);
 }
 
+/// Implements Mark A. Robertson et al., 1999
+/// "Dynamic Range Improvement Through Multiple Exposures"
 template<typename ptype, typename ImageType>
 void robertson_solver(const int channel,
                       const int input_depth,
@@ -115,8 +119,6 @@ void robertson_solver(const int channel,
                       const std::vector<float>& input_weights,
                       double* response)
 {
-    /// Implements Mark A. Robertson et al., 1999
-    /// "Dynamic Range Improvement Through Multiple Exposures"
 
     const int sources_size = (int)sources.size();
     const int samples_size = (int)points.size();
@@ -184,7 +186,7 @@ void robertson_solver(const int channel,
                 I[m] = -1.0; // Mark unobserved
         }
 
-        /// Interpolate unobserved values in the Log-Domain
+        /// 3. Interpolate unobserved values in the Log-Domain
         int last_valid = -1;
         for (int m = 0; m < input_depth; ++m) {
             if (I[m] >= 0.0) {
@@ -207,12 +209,12 @@ void robertson_solver(const int channel,
             }
         }
 
-        /// Enforce strict monotonicity (crucial to prevent color channel inversions)
+        /// 4. Enforce strict monotonicity (crucial to prevent color channel inversions)
         for (int m = 1; m < input_depth; ++m) {
             if (I[m] < I[m - 1]) I[m] = I[m - 1];
         }
 
-        /// 3. Normalize to Mid-Value
+        /// 5. Normalize to Mid-Value
         const double mid_val = I[input_depth / 2];
         if (mid_val > 0.0)
         {
@@ -221,7 +223,7 @@ void robertson_solver(const int channel,
         }
     }
 
-    /// Output Logarithmic Response exactly like Debevec so processor logic stays identical
+    /// 6. Output Logarithmic Response exactly like Debevec so processor logic stays identical
     for (int m = 0; m < input_depth; ++m)
     {
         if (I[m] <= 0.0)
