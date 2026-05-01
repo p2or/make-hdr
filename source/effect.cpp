@@ -19,7 +19,7 @@ void Effect<ptype>::changedParam(const OFX::InstanceChangedArgs& args, const std
     {
         bool use;
         _use_middle_gray->getValue(use);
-        _middle_gray->setIsSecret(!use);
+        _middle_gray->setEnabled(use);
     }
 }
 
@@ -198,7 +198,7 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     OFX::DoubleParamDescriptor* gamma_param = desc.defineDoubleParam("gamma");
     OFX::DoubleParamDescriptor* highlights_param = desc.defineDoubleParam("highlights");
     OFX::BooleanParamDescriptor* use_middle_gray_param = desc.defineBooleanParam("use_middle_gray");
-    OFX::DoubleParamDescriptor* middle_gray_param = desc.defineDoubleParam("middle_gray");
+    OFX::RGBAParamDescriptor* middle_gray_param = desc.defineRGBAParam("middle_gray");
     OFX::BooleanParamDescriptor* show_samples_param = desc.defineBooleanParam("show_samples");
     OFX::IntParamDescriptor* samples_param = desc.defineIntParam("samples");
     OFX::ChoiceParamDescriptor* solver_param = desc.defineChoiceParam("solver");
@@ -211,42 +211,46 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
 
     calibrate_param->setDefault(true);
     calibrate_param->setLabel("calibrate response");
+    calibrate_param->setHint("When on, the camera response curve is estimated from the source images using the selected solver. When off, a linear response is assumed.");
     calibrate_param->setParent(*exposure_times_group);
+
+    use_middle_gray_param->setDefault(false);
+    use_middle_gray_param->setLabel("use middle gray");
+    use_middle_gray_param->setHint("Enable middle gray normalisation. When on, the merged image is scaled so its geometric mean luminance matches the target middle gray value.");
+    use_middle_gray_param->setParent(*tone_mapping_group);
 
     exposure_param->setDefault(0);
     exposure_param->setDisplayRange(-16, 16);
+    exposure_param->setHint("Global exposure adjustment in stops applied to the merged HDR image before tone mapping.");
     exposure_param->setParent(*tone_mapping_group);
 
     gamma_param->setDefault(1.0);
     gamma_param->setDisplayRange(0, 2);
+    gamma_param->setHint("Gamma exponent applied per-pixel after HDR merging. 1.0 keeps linear output.");
     gamma_param->setParent(*tone_mapping_group);
 
     highlights_param->setDefault(1.0);
     highlights_param->setDisplayRange(0, 1);
+    highlights_param->setHint("Blends between fully tone-mapped (0) and linear (1) output. Lower values compress highlights more aggressively.");
     highlights_param->setParent(*tone_mapping_group);
 
-    use_middle_gray_param->setDefault(false);
-    use_middle_gray_param->setLabel("set middle gray");
-    use_middle_gray_param->setHint("Enable middle gray normalisation. When on, the merged image is scaled so its geometric mean luminance matches the target middle gray value.");
-    use_middle_gray_param->setParent(*tone_mapping_group);
-
-    middle_gray_param->setDefault(0.18);
-    middle_gray_param->setRange(0.01, 1.0);
-    middle_gray_param->setDisplayRange(0.01, 1.0);
-    middle_gray_param->setLabel("target middle gray");
-    middle_gray_param->setHint("Target log-average luminance. Normalises scene brightness so 0.18 gives a perceptually balanced starting point. Applied before exposure.");
-    middle_gray_param->setIsSecret(true);
+    middle_gray_param->setDefault(0.18, 0.18, 0.18, 1.0);
+    middle_gray_param->setLabel("middle gray");
+    middle_gray_param->setHint("Pick the reference gray patch from the scene (e.g. a color checker). The plugin scales the merged image so the luminance of the picked color maps to 0.18 linear.");
+    middle_gray_param->setEnabled(false);
     middle_gray_param->setParent(*tone_mapping_group);
 
     show_samples_param->setDefault(false);
     show_samples_param->setParent(*advanced_group);
     show_samples_param->setLabel("show samples");
+    show_samples_param->setHint("Overlay the calibration sample positions on the output image as bright green pixels.");
 
     input_depth_param->appendOption("8 bit");
     input_depth_param->appendOption("10 bit");
     input_depth_param->appendOption("12 bit");
     input_depth_param->setParent(*advanced_group);
     input_depth_param->setLabel("input depth");
+    input_depth_param->setHint("Bit depth of the original camera footage. Determines the response curve resolution (256, 1024, or 4096 bins).");
 
     samples_param->setDefault(100);
     samples_param->setRange(1, 100);
@@ -258,6 +262,7 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     solver_param->setDefault(0);
     solver_param->setParent(*advanced_group);
     solver_param->setLabel("solver");
+    solver_param->setHint("Response curve estimation algorithm. Debevec solves a linear system (fast, sparse samples). Robertson uses an iterative expectation-maximisation approach.");
     smoothness_param->setDefault(50);
     smoothness_param->setRange(1, 100);
     smoothness_param->setDisplayRange(1, 100);
@@ -273,6 +278,7 @@ void EffectPluginFactory::describeInContext(OFX::ImageEffectDescriptor& desc, OF
     log_level_param->setDefault(2);
     log_level_param->setParent(*advanced_group);
     log_level_param->setLabel("log level");
+    log_level_param->setHint("Controls the verbosity of plugin logging. Off silences all output; debug prints detailed per-frame diagnostics.");
 
     advanced_group->setOpen(false);
 

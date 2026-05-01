@@ -133,14 +133,13 @@ public:
 
         ptype* dst = (ptype*)_dstImg->getPixelData();
 
-        // Pass 1: scene maximum (always needed for Reinhard) and, when middle gray is
-        // enabled, log-average of linear luminance for normalisation.
+        // Pass 1: scene maximum (always needed for Reinhard) and, when middle gray is enabled, 
+        // log-average of linear luminance for normalisation.
         // L_avg = exp( mean( log(ε + L_linear_i) ) )  [Reinhard 2002, eq. 1]
         //
         // dst currently holds hdr^(1/gamma) (gamma-encoded, no exposure).
         // For the geometric mean, linear luminance is recovered per channel before weighting:
-        //   lum_linear = 0.2126*R^gamma + 0.7152*G^gamma + 0.0722*B^gamma
-        // This is exact at any gamma — lum(x^(1/gamma)) != lum(x)^(1/gamma) in general.
+        // lum_linear = 0.212671*R^gamma + 0.71516*G^gamma + 0.072169*B^gamma
         double log_sum = 0.0;
         int pixel_count = 0;
         for (int i = 0; i < pixel_size(); i += _components)
@@ -170,9 +169,9 @@ public:
         //
         // When middle gray is ON:
         //   pixel_scale = pow(middle_gray * 2^exposure / lum_linear_avg, 1/gamma)
-        //   result = pow(hdr * key_scale * 2^exposure, 1/gamma)  -- exact, any gamma.
+        //   result = pow(hdr * middle_gray / lum_linear_avg * 2^exposure, 1/gamma)
         float pixel_scale;
-        if (_use_middle_gray)
+        if (_use_middle_gray && _middle_gray > 0.f)
         {
             const float lum_linear_avg = pixel_count > 0 ? std::exp((float)(log_sum / pixel_count)) : 1.f;
             pixel_scale = lum_linear_avg > 0.f
@@ -189,6 +188,7 @@ public:
         // Pass 2: Reinhard global tone mapping
         // L_d = log10(1 + L_scaled) / log10(1 + L_max_scaled)  [display luminance]
         // C_d = L_d * C / L  [per-channel, preserves hue]
+        //
         // highlights blends between fully tone-mapped (0) and linear (1)
         for (int i = 0; i < pixel_size(); i += _components)
         {

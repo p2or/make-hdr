@@ -62,7 +62,12 @@ public:
     float highlights(const double& time) { return (float)_highlights->getValueAtTime(time); }
     bool calibrate(const double& time) { bool val; _calibrate->getValueAtTime(time, val); return val; }
     bool use_middle_gray(const double& time) { bool val; _use_middle_gray->getValueAtTime(time, val); return val; }
-    float middle_gray(const double& time) { return (float)_middle_gray->getValueAtTime(time); }
+    float middle_gray(const double& time)
+    {
+        double r, g, b, a;
+        _middle_gray->getValueAtTime(time, r, g, b, a);
+        return 0.212671f * (float)r + 0.71516f * (float)g + 0.072169f * (float)b;
+    }
     bool show_samples(const double& time) { bool val; _show_samples->getValueAtTime(time, val); return val; }
     int samples(const double& time) { return _samples->getValueAtTime(time); }
     int solver_type(const double& time) { int type; _solver->getValueAtTime(time, type); return type; }
@@ -91,7 +96,7 @@ protected:
     OFX::DoubleParam* _highlights = fetchDoubleParam("highlights");
     OFX::BooleanParam* _calibrate = fetchBooleanParam("calibrate");
     OFX::BooleanParam* _use_middle_gray = fetchBooleanParam("use_middle_gray");
-    OFX::DoubleParam* _middle_gray = fetchDoubleParam("middle_gray");
+    OFX::RGBAParam* _middle_gray = fetchRGBAParam("middle_gray");
     OFX::BooleanParam* _show_samples = fetchBooleanParam("show_samples");
     OFX::IntParam* _samples = fetchIntParam("samples");
     OFX::DoubleParam* _smoothness = fetchDoubleParam("smoothness");
