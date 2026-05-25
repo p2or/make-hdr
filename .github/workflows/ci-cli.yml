@@ -1,0 +1,280 @@
+name: Build MakeHDR-CLI
+
+on:
+#   push:
+#     branches: [ main ]
+#   pull_request:
+#     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      bundle-oiio:
+        description: '[Linux/macOS] Bundle OpenImageIO in the artifact'
+        type: boolean
+        default: true
+      skip-cache:
+        description: '[Windows] Skip vcpkg cache (force fresh install)'
+        type: boolean
+        default: false
+      include-vcredist:
+        description: '[Windows] Include vc_redist.x64.exe in artifact'
+        type: boolean
+        default: false
+
+env:
+  APP_NAME: makehdr
+  BUILD_DIR: build_cli
+  DIST_DIR: dist
+
+jobs:
+
+  linux:
+    name: '${{ matrix.os }} ${{ matrix.arch-type }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      #fail-fast: false
+      matrix:
+        include:
+          - os: "ubuntu-22.04"
+            arch: x86_64
+            arch-type: Intel
+            build-type: "Release"
+    steps:
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/read-version
+        id: version
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenimageio-dev openimageio-tools libopencv-dev patchelf
+
+      - name: Configure
+        run: |
+          cmake -S . -B ${{ env.BUILD_DIR }} \
+            -DBUILD_OFX=OFF \
+            -DBUILD_CLI=ON \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
+
+      - name: Build
+        run: cmake --build ${{ env.BUILD_DIR }} --parallel
+
+      - name: Smoke test
+        run: ./${{ env.BUILD_DIR }}/${{ env.APP_NAME }} --help
+
+      - name: Bundle (with OpenImageIO)
+        if: inputs.bundle-oiio == true
+        run: |
+          mkdir -p "${{ env.DIST_DIR }}/lib"
+          cp "${{ env.BUILD_DIR }}/${{ env.APP_NAME }}" "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+          # Copy non-system shared libraries (skip glibc family)
+          ldd "${{ env.BUILD_DIR }}/${{ env.APP_NAME }}" \
+            | awk '/=> \// { print $3 }' \
+            | grep -E 'libOpenImageIO|libImath|libIex|libHalf|libtiff|libraw|libpng|libjpeg|libwebp|libboost' \
+            | xargs -I{} cp -L {} "${{ env.DIST_DIR }}/lib/"
+          patchelf --set-rpath '$ORIGIN/lib' "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+          strip "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+          strip --strip-unneeded "${{ env.DIST_DIR }}"/lib/*.so* 2>/dev/null || true
+
+      - name: Prepare binary
+        if: inputs.bundle-oiio != true
+        # Requires OpenImageIO on the target machine: apt install libopenimageio-dev
+        run: |
+          mkdir -p "${{ env.DIST_DIR }}"
+          cp "${{ env.BUILD_DIR }}/${{ env.APP_NAME }}" "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+          chmod +x "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ env.DIST_DIR }}/
+          retention-days: 14
+
+  macos:
+    name: '${{ matrix.os }} ${{ matrix.arch-type }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      #fail-fast: false
+      matrix:
+        include:
+          - os: "macos-14"
+            arch: arm64
+            arch-type: Apple Silicon
+            build-type: "Release"
+    steps:
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/read-version
+        id: version
+
+      - name: Install dependencies
+        run: brew install openimageio
+
+      - name: Configure
+        run: |
+          cmake -S . -B ${{ env.BUILD_DIR }} \
+            -DBUILD_OFX=OFF \
+            -DBUILD_CLI=ON \
+            -DUSE_ACCELERATE=ON \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+
+      - name: Build
+        run: cmake --build ${{ env.BUILD_DIR }} --parallel
+
+      - name: Smoke test
+        run: ./${{ env.BUILD_DIR }}/${{ env.APP_NAME }} --help
+
+      - name: Bundle (with OpenImageIO)
+        if: inputs.bundle-oiio == true
+        run: |
+          brew install dylibbundler
+          mkdir -p "${{ env.DIST_DIR }}/libs"
+          cp "${{ env.BUILD_DIR }}/${{ env.APP_NAME }}" "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+          dylibbundler -od -b \
+            -x "${{ env.DIST_DIR }}/${{ env.APP_NAME }}" \
+            -d "${{ env.DIST_DIR }}/libs/" \
+            -p @executable_path/libs/
+          # dylibbundler replaces multiple original rpaths in each dylib with the same
+          # @executable_path/libs/ path, creating duplicates. macOS dyld rejects dylibs
+          # with duplicate rpath entries, so remove all rpaths (they are unused after
+          # dylibbundler converts all references to @executable_path/libs/... paths).
+          for lib in "${{ env.DIST_DIR }}/libs/"*.dylib; do
+            otool -l "$lib" \
+              | awk '/cmd LC_RPATH/{f=1} f && /path /{print $2; f=0}' \
+              | while read -r rp; do
+                  install_name_tool -delete_rpath "$rp" "$lib" 2>/dev/null || true
+                done
+          done
+          strip "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+          find "${{ env.DIST_DIR }}/libs/" -name "*.dylib" -exec strip -x {} \;
+          # Re-sign after strip and install_name_tool (both invalidate ad-hoc signatures)
+          codesign --force --sign - "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+          find "${{ env.DIST_DIR }}/libs/" -name "*.dylib" \
+            -exec codesign --force --sign - {} \;
+
+      - name: Prepare binary
+        if: inputs.bundle-oiio != true
+        # Requires OpenImageIO on the target machine: brew install openimageio
+        run: |
+          mkdir -p "${{ env.DIST_DIR }}"
+          cp "${{ env.BUILD_DIR }}/${{ env.APP_NAME }}" "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+          chmod +x "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+          xattr -cr "${{ env.DIST_DIR }}/${{ env.APP_NAME }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ env.DIST_DIR }}/
+          retention-days: 14
+
+  windows:
+    name: '${{ matrix.os }} ${{ matrix.arch-type }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      #fail-fast: false
+      matrix:
+        include:
+          - os: "windows-2022"
+            arch-type: Intel
+            arch: x86_64
+            build-type: "Release"
+    steps:
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/read-version
+        id: version
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        id: cache-vcpkg
+        if: inputs.skip-cache != true
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-x64-windows-oiio-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            vcpkg-x64-windows-oiio-
+
+      - name: Install dependencies (vcpkg)
+        if: inputs.skip-cache == true || steps.cache-vcpkg.outputs.cache-hit != 'true'
+        run: vcpkg install openimageio:x64-windows
+        shell: pwsh
+
+      - name: Set vcpkg toolchain
+        run: echo "CMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      - name: Configure (VS2022)
+        run: |
+          cmake -S . -B ${{ env.BUILD_DIR }} `
+            -DBUILD_OFX=OFF `
+            -DBUILD_CLI=ON `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:CMAKE_TOOLCHAIN_FILE"
+        shell: pwsh
+
+      - name: Build
+        run: cmake --build ${{ env.BUILD_DIR }} --parallel --config ${{ matrix.build-type }}
+
+      - name: Smoke test
+        run: ${{ env.BUILD_DIR }}\Release\${{ env.APP_NAME }}.exe --help
+        shell: pwsh
+
+      - name: Create distribution folder
+        run: |
+          # Locate dumpbin.exe via vswhere (not on PATH by default)
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -property installationPath
+          $dumpbin = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter "dumpbin.exe" |
+            Where-Object { $_.FullName -match "Hostx64\\x64" } |
+            Select-Object -First 1 -ExpandProperty FullName
+          $dist = "${{ env.DIST_DIR }}"
+          New-Item -ItemType Directory -Path $dist -Force
+          $exe = "${{ env.BUILD_DIR }}\Release\${{ env.APP_NAME }}.exe"
+          Copy-Item $exe $dist
+          $vcpkg_bin = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin"
+          # Recursively copy only the vcpkg DLLs the binary actually depends on
+          $copied = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+          function Copy-Deps($file) {
+            $deps = (& $dumpbin /dependents $file) |
+              Where-Object { $_ -match '^\s+\S+\.dll\s*$' } |
+              ForEach-Object { $_.Trim() }
+            foreach ($dll in $deps) {
+              if ($copied.Add($dll)) {
+                $src = Join-Path $vcpkg_bin $dll
+                if (Test-Path $src) {
+                  Copy-Item $src $dist
+                  Copy-Deps $src
+                }
+              }
+            }
+          }
+          Copy-Deps $exe
+        shell: pwsh
+
+      - name: Include VC++ Redistributable (optional)
+        if: inputs.include-vcredist == true
+        run: |
+          $dist = "${{ env.DIST_DIR }}"
+          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "$dist\vc_redist.x64.exe"
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ env.DIST_DIR }}
+          retention-days: 14
